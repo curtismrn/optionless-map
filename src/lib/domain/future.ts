@@ -3,23 +3,7 @@
 
 export type EntityRef = { type: "location" | "variant" | "poi"; id: string };
 
-export type MediaKind = "photo" | "video" | "onboard" | "drift_clip";
-
-export interface MediaItem {
-  id: string;
-  attachedTo: EntityRef;
-  kind: MediaKind;
-  /** Storage object key (e.g. Supabase Storage) — never a raw user-supplied URL. */
-  storageKey: string;
-  thumbnailKey?: string;
-  capturedAt?: string;
-  credit: string;
-  license: string;
-  publication: "pending_review" | "published" | "rejected" | "reported";
-  /** Location metadata stripped on upload unless the contributor opts in. */
-  exifStripped: boolean;
-  createdAt: string;
-}
+// MediaItem is now a core entity — see schema.ts.
 
 export interface VehicleProfile {
   id: string;

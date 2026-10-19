@@ -1,7 +1,7 @@
 // Local, dataset-only search. No geocoder: places absent from the dataset are
 // not returned, by design.
 
-import { ACTIVITY_LABEL, MOTORSPORT_ACTIVITIES, type ActivityType, type Continent, type Location, type Poi, type Variant } from "@/lib/domain/schema";
+import { ACTIVITY_LABEL, MOTORSPORT_ACTIVITIES, type ActivityType, type Continent, type Location, type MediaItem, type Poi, type Variant } from "@/lib/domain/schema";
 import { COUNTRY_NAMES } from "@/data/seed";
 
 export type SearchHit =
@@ -24,7 +24,7 @@ export const DEFAULT_FILTERS: Filters = {
   verification: "all",
   entity: "all",
   withMedia: false,
-  includePending: true,
+  includePending: false,
 };
 
 const norm = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
@@ -48,29 +48,35 @@ function bestOf(q: string, fields: [string | undefined, number][]): { score: num
   return { score, matched };
 }
 
-/** Does a variant pass the active filters? (Media is not yet supported → no variant has media.) */
-export function variantPasses(v: Variant, loc: Location | undefined, f: Filters): boolean {
+/** Entity ids (locations, variants, POIs) that have at least one visible photo or clip. */
+export function mediaIndex(media: MediaItem[]): Set<string> {
+  return new Set(media.filter((m) => m.status !== "removed").map((m) => m.attachedTo.id));
+}
+
+/** Does a variant pass the active filters? A variant "has media" if it or its parent road has some. */
+export function variantPasses(v: Variant, loc: Location | undefined, f: Filters, withMedia?: Set<string>): boolean {
   if (!f.includePending && v.publication !== "published") return false;
   if (v.publication === "rejected" || v.publication === "archived") return false;
   if (f.activities.length && !f.activities.includes(v.activity)) return false;
   if (f.continents.length && (!loc || !f.continents.includes(loc.continent))) return false;
   if (f.verification === "verified" && v.verification === "unverified") return false;
   if (f.verification === "unverified" && v.verification !== "unverified") return false;
-  if (f.withMedia) return false;
+  if (f.withMedia && !(withMedia?.has(v.id) || withMedia?.has(v.locationId))) return false;
   return true;
 }
 
-export function locationPasses(l: Location, variants: Variant[], f: Filters): boolean {
+export function locationPasses(l: Location, variants: Variant[], f: Filters, withMedia?: Set<string>): boolean {
   if (!f.includePending && l.publication !== "published") return false;
   if (f.continents.length && !f.continents.includes(l.continent)) return false;
-  return variants.some((v) => v.locationId === l.id && variantPasses(v, l, f));
+  return variants.some((v) => v.locationId === l.id && variantPasses(v, l, f, withMedia));
 }
 
 export function search(
   query: string,
-  data: { locations: Location[]; variants: Variant[]; pois: Poi[] },
+  data: { locations: Location[]; variants: Variant[]; pois: Poi[]; media?: MediaItem[] },
   filters: Filters,
 ): SearchHit[] {
+  const withMedia = mediaIndex(data.media ?? []);
   const q = norm(query.trim());
   if (!q) return [];
   const locById = new Map(data.locations.map((l) => [l.id, l]));
@@ -79,7 +85,7 @@ export function search(
 
   if (filters.entity !== "variants") {
     for (const l of data.locations) {
-      if (!locationPasses(l, data.variants, filters)) continue;
+      if (!locationPasses(l, data.variants, filters, withMedia)) continue;
       const { score, matched } = bestOf(q, [
         [l.name, 10],
         [countryNames(l.countries), 5],
@@ -94,7 +100,7 @@ export function search(
   if (filters.entity !== "locations") {
     for (const v of data.variants) {
       const loc = locById.get(v.locationId);
-      if (!variantPasses(v, loc, filters)) continue;
+      if (!variantPasses(v, loc, filters, withMedia)) continue;
       const { score, matched } = bestOf(q, [
         [v.name, 9],
         [loc?.name, 6],

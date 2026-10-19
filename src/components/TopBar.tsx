@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { Plus, Search, X, UserRound, Inbox } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Plus, Search, X, UserRound, Inbox, Camera, Spline, ChevronDown } from "lucide-react";
 import { app, useApp } from "@/lib/store";
 import { STYLE_META, type StyleId } from "@/components/map/styles";
-import { Button, cn } from "@/components/ui";
+import { cn } from "@/components/ui";
 
 export function Wordmark() {
   return (
@@ -98,19 +98,7 @@ export function TopBar() {
       </div>
       <div className="flex-1" />
       <StyleSelector className="hidden xl:flex" />
-      <button
-        onClick={() => app.set({ contribute: { kind: "review" }, selection: null })}
-        title="Contributions submitted from this browser (local demo queue)"
-        className="hidden h-8 items-center gap-1.5 border border-line px-2 font-mono text-[10px] tracking-[0.1em] text-fg-dim hover:border-line-strong hover:text-fg md:flex"
-      >
-        <Inbox className="size-3.5" />
-        LOCAL QUEUE
-        <span className={cn("tabular-nums", pending > 0 ? "text-amber" : "text-fg-faint")}>{pending}</span>
-      </button>
-      <Button variant="solid" onClick={() => app.set({ contribute: { kind: "new_variant" }, selection: null })}>
-        <Plus className="size-3.5" />
-        <span className="hidden sm:inline">Add road</span>
-      </Button>
+      <ContributeMenu pending={pending} />
       <div
         className="grid size-8 shrink-0 place-items-center border border-line text-fg-faint"
         title="Browsing anonymously — accounts are planned (Supabase Auth)"
@@ -119,5 +107,74 @@ export function TopBar() {
         <UserRound className="size-4" />
       </div>
     </header>
+  );
+}
+
+/** Discreet contribution entry: media on existing roads first, road suggestions second. */
+function ContributeMenu({ pending }: { pending: number }) {
+  const [open, setOpen] = useState(false);
+  const selection = useApp((s) => s.selection);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && setOpen(false);
+    window.addEventListener("mousedown", close);
+    return () => window.removeEventListener("mousedown", close);
+  }, [open]);
+
+  const target = selection;
+  const go = (fn: () => void) => {
+    setOpen(false);
+    fn();
+  };
+  const item = "flex w-full items-start gap-2.5 px-3 py-2.5 text-left hover:bg-panel-2 disabled:cursor-not-allowed disabled:opacity-50";
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        aria-haspopup="menu"
+        className="flex h-8 items-center gap-1.5 border border-line px-2.5 font-mono text-[10px] tracking-[0.1em] text-fg-dim uppercase hover:border-line-strong hover:text-fg"
+      >
+        <Plus className="size-3.5" />
+        <span className="hidden sm:inline">Contribute</span>
+        {pending > 0 && <span className="text-amber tabular-nums">{pending}</span>}
+        <ChevronDown className="size-3" />
+      </button>
+      {open && (
+        <div role="menu" className="om-panel absolute top-10 right-0 z-50 w-72 animate-in shadow-[0_12px_32px_rgba(0,0,0,0.5)]">
+          <button
+            role="menuitem"
+            disabled={!target}
+            className={item}
+            onClick={() => go(() => target && app.set({ contribute: { kind: "add_media", target } }))}
+          >
+            <Camera className="mt-0.5 size-4 text-ice" />
+            <span>
+              <span className="block text-[13px] text-fg">Add a photo or clip</span>
+              <span className="block text-[11px] text-fg-faint">{target ? "To the road you have open" : "Open a road first, then share"}</span>
+            </span>
+          </button>
+          <button role="menuitem" className={item} onClick={() => go(() => app.set({ contribute: { kind: "new_variant" }, selection: null }))}>
+            <Spline className="mt-0.5 size-4 text-fg-dim" />
+            <span>
+              <span className="block text-[13px] text-fg">Suggest a missing road</span>
+              <span className="block text-[11px] text-fg-faint">Reviewed before it joins the atlas</span>
+            </span>
+          </button>
+          <div className="h-px bg-line" />
+          <button role="menuitem" className={item} onClick={() => go(() => app.set({ contribute: { kind: "my_submissions" }, selection: null }))}>
+            <Inbox className="mt-0.5 size-4 text-fg-dim" />
+            <span className="flex-1">
+              <span className="block text-[13px] text-fg">My submissions</span>
+              <span className="block text-[11px] text-fg-faint">Status of your suggestions, reports and media</span>
+            </span>
+            {pending > 0 && <span className="font-mono text-[10px] text-amber">{pending} pending</span>}
+          </button>
+        </div>
+      )}
+    </div>
   );
 }

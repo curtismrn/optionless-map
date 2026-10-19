@@ -10,7 +10,7 @@ import type { Map as MLMap, ExpressionSpecification, GeoJSONSource, LayerSpecifi
 import type { Feature, FeatureCollection, LineString, Point } from "geojson";
 import { MOTORSPORT_ACTIVITIES, ACTIVITY_CODE, type Location, type Poi, type Variant } from "@/lib/domain/schema";
 import { samplePoints, sliceByDistance, lineLength, type Coord } from "@/lib/geo";
-import { variantPasses, locationPasses, type Filters } from "@/lib/search";
+import { variantPasses, locationPasses, mediaIndex, type Filters } from "@/lib/search";
 import type { AppState } from "@/lib/store";
 
 export const C = {
@@ -47,7 +47,15 @@ export function variantCodes(variants: Variant[]): Map<string, string> {
 export function buildCollections(data: Data, filters: Filters, selection: AppState["selection"]) {
   const locById = new Map(data.locations.map((l) => [l.id, l]));
   const codes = variantCodes(data.variants);
-  const visibleVariants = data.variants.filter((v) => variantPasses(v, locById.get(v.locationId), filters));
+  const withMedia = mediaIndex(data.media);
+  const visibleVariants = data.variants.filter((v) => variantPasses(v, locById.get(v.locationId), filters, withMedia));
+  const mediaCount = new Map<string, number>();
+  const variantLoc = new Map(data.variants.map((v) => [v.id, v.locationId]));
+  for (const m of data.media) {
+    if (m.status === "removed") continue;
+    const locId = m.attachedTo.type === "location" ? m.attachedTo.id : variantLoc.get(m.attachedTo.id);
+    if (locId) mediaCount.set(locId, (mediaCount.get(locId) ?? 0) + 1);
+  }
 
   const variantProps = (v: Variant) => {
     const loc = locById.get(v.locationId);
@@ -83,7 +91,7 @@ export function buildCollections(data: Data, filters: Filters, selection: AppSta
 
   const locations = fc<Point>(
     data.locations
-      .filter((l) => locationPasses(l, data.variants, filters))
+      .filter((l) => locationPasses(l, data.variants, filters, withMedia))
       .map((l) => ({
         type: "Feature",
         id: l.id,
@@ -91,6 +99,7 @@ export function buildCollections(data: Data, filters: Filters, selection: AppSta
           id: l.id,
           name: l.name.toUpperCase(),
           count: visibleVariants.filter((v) => v.locationId === l.id).length,
+          media: mediaCount.get(l.id) ?? 0,
           featured: l.featured,
           pending: l.publication !== "published",
         },
@@ -148,7 +157,10 @@ export function buildCollections(data: Data, filters: Filters, selection: AppSta
     if (p?.parent.type === "variant") selVariantId = p.parent.id;
     selLocationId = p?.parent.type === "location" ? p.parent.id : data.variants.find((v) => v.id === selVariantId)?.locationId ?? null;
   }
-  const selectedSet = data.variants.filter((v) => v.locationId === selLocationId && v.publication !== "rejected");
+  // Unapproved suggestions stay out of the atlas unless explicitly opened or opted into.
+  const selectedSet = data.variants.filter(
+    (v) => v.locationId === selLocationId && (v.publication === "published" || v.id === selVariantId || (filters.includePending && v.publication === "pending_review")),
+  );
   const selected = fc<LineString>(
     selectedSet.map((v) => ({
       type: "Feature",
@@ -186,13 +198,15 @@ export function buildCollections(data: Data, filters: Filters, selection: AppSta
 export function buildDraft(draw: AppState["draw"]) {
   return {
     line: fc<LineString>(
-      draw.coords.length >= 2 ? [{ type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: draw.coords } }] : [],
+      draw.coords.length >= 2
+        ? [{ type: "Feature", properties: { snapped: draw.snapStatus === "snapped" }, geometry: { type: "LineString", coordinates: draw.coords } }]
+        : [],
     ),
     vertices: fc<Point>(
-      draw.coords.map((c, i) => ({
+      draw.waypoints.map((c, i) => ({
         type: "Feature",
         id: i,
-        properties: { i, first: i === 0, last: i === draw.coords.length - 1 && i > 0 },
+        properties: { i, first: i === 0, last: i === draw.waypoints.length - 1 && i > 0 },
         geometry: { type: "Point", coordinates: c },
       })),
     ),
@@ -236,12 +250,13 @@ export function addOverlay(map: MLMap, light: boolean) {
   const add = (id: string, extra: Record<string, unknown> = {}) => {
     if (!map.getSource(id)) map.addSource(id, { type: "geojson", data: empty, ...extra } as never);
   };
-  add("om-variants", { promoteId: "id", tolerance: 0.3 });
+  // Low tolerance: winding passes must not collapse into straight chords at regional zooms.
+  add("om-variants", { promoteId: "id", tolerance: 0.08 });
   add("om-locations", { promoteId: "id", cluster: true, clusterMaxZoom: 4, clusterRadius: 46 });
   add("om-density");
   add("om-pois", { promoteId: "id" });
   add("om-hairpins");
-  add("om-selected", { promoteId: "id" });
+  add("om-selected", { promoteId: "id", tolerance: 0.05 });
   add("om-endpoints");
   add("om-draft-line");
   add("om-draft-vertices", { promoteId: "i" });
@@ -566,7 +581,12 @@ export function addOverlay(map: MLMap, light: boolean) {
       filter: ["!", ["has", "point_count"]],
       maxzoom: 12,
       layout: {
-        "text-field": ["concat", ["get", "name"], "  ", ["to-string", ["get", "count"]], "V"],
+        "text-field": [
+          "concat",
+          ["get", "name"],
+          ["case", [">", ["get", "media"], 0], ["concat", "\n", ["to-string", ["get", "media"]], " PHOTOS & CLIPS"], ""],
+        ],
+        "text-justify": "left",
         "text-font": FONT_BOLD,
         "text-size": ["interpolate", ["linear"], ["zoom"], 3, 10, 9, 12],
         "text-letter-spacing": 0.1,
@@ -592,7 +612,8 @@ export function addOverlay(map: MLMap, light: boolean) {
       type: "line",
       source: "om-draft-line",
       layout: { "line-join": "round", "line-cap": "round" },
-      paint: { "line-color": C.white, "line-width": 3, "line-dasharray": [2, 1] },
+      // Snapped routes draw solid; unsnapped straight segments stay dashed so they read as provisional.
+      paint: { "line-color": ["case", ["get", "snapped"], C.white, C.amber], "line-width": 3.5, "line-opacity": 0.95 },
     },
     {
       id: "om-draft-vertices",

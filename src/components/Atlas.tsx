@@ -8,6 +8,8 @@ import { ExplorePanel } from "@/components/ExplorePanel";
 import { DetailPanel } from "@/components/DetailPanel";
 import { ContributePanel } from "@/components/ContributePanel";
 import { StatusBar, MapControls, HoverCard, Toast, MapError } from "@/components/Chrome";
+import { Lightbox } from "@/components/media/Lightbox";
+import { SnapEngine } from "@/components/SnapEngine";
 
 const MapView = dynamic(() => import("@/components/map/MapView"), {
   ssr: false,
@@ -29,6 +31,7 @@ export function Atlas() {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape" || (e.target as HTMLElement)?.closest("input,textarea,select")) return;
       const s = app.get();
+      if (s.lightbox) return; // the viewer handles its own Escape
       if (s.draw.active) app.set({ draw: { ...s.draw, active: false } });
       else if (s.selection) app.set({ selection: null });
     };
@@ -54,6 +57,8 @@ export function Atlas() {
       </div>
       <HoverCard />
       <Toast />
+      <Lightbox />
+      <SnapEngine />
     </main>
   );
 }

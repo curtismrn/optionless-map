@@ -6,11 +6,12 @@ import {
   app,
   useApp,
   submitContribution,
-  reviewContribution,
   resetLocalContributions,
   toast,
   EMPTY_DRAW,
+  openDetail,
   type ContributeIntent,
+  type ReportSubject,
 } from "@/lib/store";
 import {
   ACTIVITY_LABEL,
@@ -30,7 +31,8 @@ import { findPossibleDuplicates } from "@/lib/repository/local";
 import { parseGpx } from "@/lib/gpx";
 import { bboxOf, formatKm, lineLength, simplify, type Coord } from "@/lib/geo";
 import { focusVariant, getMap } from "@/components/map/controller";
-import { PanelShell } from "@/components/DetailPanel";
+import { PanelShell } from "@/components/PanelShell";
+import { AddMediaPanel } from "@/components/media/AddMediaPanel";
 import { Badge, Button, cn, Field, inputCls, PublicationBadge } from "@/components/ui";
 import { COUNTRY_NAMES } from "@/data/seed";
 
@@ -76,8 +78,12 @@ export function ContributePanel() {
       return <PoiFlow key={intent.targetId} targetId={intent.targetId} />;
     case "description_edit":
       return <DescriptionFlow key={intent.variantId} variantId={intent.variantId} />;
-    case "review":
-      return <ReviewQueue />;
+    case "add_media":
+      return <AddMediaPanel key={intent.target.id} target={intent.target} />;
+    case "report":
+      return <ReportFlow key={intent.subject.id} subject={intent.subject} />;
+    case "my_submissions":
+      return <MySubmissions />;
   }
 }
 
@@ -90,36 +96,41 @@ function DrawTools({ allowGpx = true }: { allowGpx?: boolean }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [gpxMsg, setGpxMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const len = draw.coords.length >= 2 ? lineLength(draw.coords) : 0;
+  const setDraw = (patch: Partial<typeof draw>) => app.set({ draw: { ...app.get().draw, ...patch } });
 
   const onFile = async (f: File) => {
     if (f.size > 5_000_000) return setGpxMsg({ ok: false, text: "File larger than 5 MB." });
     const r = parseGpx(await f.text());
     if (!r.ok) return setGpxMsg({ ok: false, text: r.error });
+    // A recorded track already follows the road: keep it as-is instead of re-routing.
     const coords = simplify(r.coordinates, 3);
-    app.set({ draw: { ...app.get().draw, active: true, purpose: "route", coords } });
+    setDraw({ active: true, purpose: "route", waypoints: coords, snap: false });
     setGpxMsg({
       ok: true,
-      text: `Imported ${r.coordinates.length} ${r.source} points${r.name ? ` from “${r.name}”` : ""}, simplified to ${coords.length} editable vertices.${r.droppedPoints ? ` ${r.droppedPoints} invalid/excess points dropped.` : ""}`,
+      text: `Imported ${r.coordinates.length} ${r.source} points${r.name ? ` from “${r.name}”` : ""}, simplified to ${coords.length} vertices. Road-following is off for recorded tracks.${r.droppedPoints ? ` ${r.droppedPoints} invalid/excess points dropped.` : ""}`,
     });
     const [w, s, e, n] = bboxOf(coords);
     getMap()?.fitBounds([[w, s], [e, n]], { padding: 80, duration: 1200 });
   };
 
+  const status = {
+    idle: ["text-fg-faint", "Place at least two points"],
+    routing: ["text-ice", "Finding the road…"],
+    snapped: ["text-ok", "Following OSM roads"],
+    unsnapped: ["text-amber", draw.snap ? `Straight lines — ${draw.snapError ?? "no road route"}` : "Straight lines (road-following off)"],
+  }[draw.snapStatus];
+
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap gap-1.5">
-        <Button
-          variant={draw.active ? "solid" : "outline"}
-          size="sm"
-          onClick={() => app.set({ draw: { ...draw, active: !draw.active, purpose: "route" } })}
-        >
+        <Button variant={draw.active ? "solid" : "outline"} size="sm" onClick={() => setDraw({ active: !draw.active, purpose: "route" })}>
           {draw.active ? <Check className="size-3" /> : <Pencil className="size-3" />}
-          {draw.active ? "Finish drawing" : draw.coords.length ? "Resume drawing" : "Start drawing"}
+          {draw.active ? "Done placing" : draw.waypoints.length ? "Edit points" : "Place points"}
         </Button>
-        <Button size="sm" disabled={!draw.coords.length} onClick={() => app.set({ draw: { ...draw, coords: draw.coords.slice(0, -1) } })}>
+        <Button size="sm" disabled={!draw.waypoints.length} onClick={() => setDraw({ waypoints: draw.waypoints.slice(0, -1) })}>
           <Undo2 className="size-3" /> Undo
         </Button>
-        <Button size="sm" variant="ghost" disabled={!draw.coords.length} onClick={() => app.set({ draw: { ...draw, coords: [] } })}>
+        <Button size="sm" variant="ghost" disabled={!draw.waypoints.length} onClick={() => setDraw({ waypoints: [] })}>
           <Trash2 className="size-3" /> Clear
         </Button>
         {allowGpx && (
@@ -141,18 +152,19 @@ function DrawTools({ allowGpx = true }: { allowGpx?: boolean }) {
           </>
         )}
       </div>
-      <div className="flex items-center justify-between border border-line bg-ink px-2.5 py-1.5 font-mono text-[10.5px] text-fg-dim">
-        <span>
-          <span className="text-fg tabular-nums">{draw.coords.length}</span> PTS
+      <label className="flex items-center gap-2 text-[12px] text-fg-dim">
+        <input type="checkbox" checked={draw.snap} onChange={(e) => setDraw({ snap: e.target.checked })} className="accent-[#8fd6ea]" />
+        Follow roads between my points <span className="text-fg-faint">(OpenStreetMap routing)</span>
+      </label>
+      <div className="flex items-center justify-between gap-2 border border-line bg-ink px-2.5 py-1.5 font-mono text-[10.5px] text-fg-dim">
+        <span className="shrink-0">
+          <span className="text-fg tabular-nums">{draw.waypoints.length}</span> PTS · <span className="text-fg tabular-nums">{formatKm(len)}</span>
         </span>
-        <span>
-          <span className="text-fg tabular-nums">{formatKm(len)}</span>
-        </span>
-        <span className={draw.active ? "text-ice" : "text-fg-faint"}>{draw.active ? "● DRAWING" : "○ IDLE"}</span>
+        <span className={cn("truncate", status[0])}>{status[1]}</span>
       </div>
       {draw.active && (
         <p className="text-[11px] leading-snug text-fg-faint">
-          Click the map to add points · drag a point to move it · right-click a point to remove it.
+          Click the map at the start, a few points along the road, and the end · drag a point to move it · right-click a point to remove it.
         </p>
       )}
       {gpxMsg && <p className={cn("text-[11px] leading-snug", gpxMsg.ok ? "text-ok" : "text-signal")}>{gpxMsg.text}</p>}
@@ -234,7 +246,7 @@ function NewVariantFlow({ intent }: { intent: Extract<ContributeIntent, { kind: 
             : undefined,
         variant: VariantDraft.parse({ ...form, surface: form.surface || undefined, geometry }),
       });
-      toast("Submitted — your variant is visible locally as pending review.");
+      toast("Suggestion sent for review — only you can see it until it is approved.");
       app.set({ contribute: null, draw: EMPTY_DRAW, selection: { type: "variant", id: `var-${c.id}` } });
       focusVariant(`var-${c.id}`);
     } catch (err) {
@@ -247,8 +259,8 @@ function NewVariantFlow({ intent }: { intent: Extract<ContributeIntent, { kind: 
   const loc = data.locations.find((l) => l.id === locationId);
 
   return (
-    <PanelShell label="Propose a new route variant">
-      <Header kicker="Contribute · new route variant" title={parentMode === "existing" && loc ? `New variant · ${loc.name}` : "New road"} />
+    <PanelShell label="Suggest a missing road">
+      <Header kicker="Suggest · reviewed before publication" title={parentMode === "existing" && loc ? `Missing route · ${loc.name}` : "Suggest a missing road"} />
       <DemoNotice />
       <ol className="grid grid-cols-4 border-b border-line">
         {STEPS.map((s, i) => (
@@ -345,7 +357,7 @@ function NewVariantFlow({ intent }: { intent: Extract<ContributeIntent, { kind: 
         {step === 1 && (
           <>
             <p className="text-[12px] leading-relaxed text-fg-dim">
-              Trace the road on the map, or import a GPX track. Follow the actual road — the geometry will be reviewed against map data before
+              Click the start, a few points along the way and the end — the line follows OSM roads between them. Or import a GPX track. Suggestions are reviewed against map data before
               publication.
             </p>
             <DrawTools />
@@ -403,7 +415,7 @@ function NewVariantFlow({ intent }: { intent: Extract<ContributeIntent, { kind: 
               <dd className="text-fg">{ACTIVITY_LABEL[form.activity]}</dd>
               <dt className="om-label pt-px">Geometry</dt>
               <dd className="font-mono text-[11px] text-fg-dim">
-                {draw.coords.length} pts · {formatKm(lineLength(draw.coords))}
+                {draw.coords.length} vertices · {formatKm(lineLength(draw.coords))} · {draw.snapStatus === "snapped" ? "follows OSM roads" : "straight segments"}
               </dd>
               <dt className="om-label pt-px">Status</dt>
               <dd>
@@ -465,7 +477,10 @@ function CorrectionFlow({ variantId }: { variantId: string }) {
   useEffect(() => {
     if (!v) return;
     const original = v.geometry.coordinates as Coord[];
-    app.set({ draw: { active: true, purpose: "route", coords: simplify(original, 25), reference: original } });
+    // ~8 waypoints along the current line: routed through OSM they reproduce it; dragging one onto the right road fixes it.
+    const step = Math.max(1, Math.floor(original.length / 8));
+    const waypoints = original.filter((_, i) => i % step === 0 || i === original.length - 1);
+    app.set({ draw: { ...EMPTY_DRAW, active: true, purpose: "route", waypoints, coords: original, snapStatus: "snapped", reference: original } });
     focusVariant(v.id);
     return () => app.set({ draw: EMPTY_DRAW });
   }, [v]);
@@ -521,7 +536,7 @@ function PoiFlow({ targetId }: { targetId: string }) {
   const [err, setErr] = useState("");
 
   useEffect(() => {
-    app.set({ draw: { active: true, purpose: "poi", coords: [], reference: null } });
+    app.set({ draw: { ...EMPTY_DRAW, active: true, purpose: "poi", snap: false } });
     return () => app.set({ draw: EMPTY_DRAW });
   }, []);
 
@@ -631,23 +646,120 @@ function DescriptionFlow({ variantId }: { variantId: string }) {
 }
 
 // ---------------------------------------------------------------------------
-// Local review queue (demo reviewer)
+// Report a problem (road, route, point or media)
 // ---------------------------------------------------------------------------
 
-function ReviewQueue() {
+const REPORT_REASONS = {
+  incorrect_geometry: "Route line is wrong",
+  duplicate: "Duplicate of another road",
+  wrong_information: "Wrong name or information",
+  unsafe_or_illegal: "Promotes unsafe or illegal driving",
+  private_location: "Shows a private / personal location",
+  copyright: "Copyright problem",
+  inappropriate: "Inappropriate content",
+  other: "Something else",
+} as const;
+type ReportReason = keyof typeof REPORT_REASONS;
+
+function ReportFlow({ subject }: { subject: ReportSubject }) {
+  const data = useApp((s) => s.data)!;
+  const reasons: ReportReason[] =
+    subject.type === "media"
+      ? ["copyright", "unsafe_or_illegal", "private_location", "inappropriate", "wrong_information", "other"]
+      : subject.type === "poi"
+        ? ["wrong_information", "private_location", "duplicate", "other"]
+        : ["incorrect_geometry", "duplicate", "wrong_information", "unsafe_or_illegal", "other"];
+  const [reason, setReason] = useState<ReportReason>(reasons[0]!);
+  const [details, setDetails] = useState("");
+  const name =
+    subject.type === "media"
+      ? data.media.find((m) => m.id === subject.id)?.title
+      : subject.type === "location"
+        ? data.locations.find((l) => l.id === subject.id)?.name
+        : subject.type === "variant"
+          ? data.variants.find((v) => v.id === subject.id)?.name
+          : data.pois.find((p) => p.id === subject.id)?.name;
+
+  const submit = async () => {
+    await submitContribution({ kind: "report", targetId: subject.id, report: { subject, reason, details: details.trim() } });
+    toast("Thanks — report recorded (pending review).");
+    app.set({ contribute: null });
+  };
+
+  return (
+    <PanelShell label="Report a problem">
+      <Header kicker={`Report · ${subject.type}`} title={name ?? "Item"} />
+      <div className="om-scroll min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-3">
+        <fieldset className="space-y-1">
+          <legend className="om-label mb-1.5">What&apos;s wrong?</legend>
+          {reasons.map((r) => (
+            <label
+              key={r}
+              className={cn(
+                "flex cursor-pointer items-center gap-2 border px-2.5 py-2 text-[12.5px]",
+                reason === r ? "border-ice/50 bg-ice/5 text-fg" : "border-line text-fg-dim hover:border-line-strong",
+              )}
+            >
+              <input type="radio" name="reason" checked={reason === r} onChange={() => setReason(r)} className="accent-[#8fd6ea]" />
+              {REPORT_REASONS[r]}
+            </label>
+          ))}
+        </fieldset>
+        {reason === "incorrect_geometry" && subject.type === "variant" && (
+          <button
+            onClick={() => app.set({ contribute: { kind: "geometry_correction", variantId: subject.id } })}
+            className="w-full border border-dashed border-line-strong px-2.5 py-2 text-left text-[12px] text-fg-dim hover:border-ice/60 hover:text-fg"
+          >
+            Know the right line? <span className="text-ice">Propose a corrected route instead →</span>
+          </button>
+        )}
+        <Field label="Details (optional)">
+          <textarea rows={3} maxLength={1000} className={inputCls} value={details} onChange={(e) => setDetails(e.target.value)} />
+        </Field>
+        <p className="text-[11px] text-fg-faint">Prototype: reports are kept in this browser; nothing reaches a moderator yet.</p>
+      </div>
+      <div className="flex gap-2 border-t border-line p-2">
+        <Button variant="ghost" onClick={closeContribute}>
+          Cancel
+        </Button>
+        <div className="flex-1" />
+        <Button variant="solid" onClick={submit}>
+          Send report
+        </Button>
+      </div>
+    </PanelShell>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// My submissions — status only. No approve/reject: that needs real accounts
+// and moderator roles, which the prototype does not have.
+// ---------------------------------------------------------------------------
+
+const KIND_LABEL: Record<Contribution["kind"], string> = {
+  new_variant: "Road suggestion",
+  geometry_correction: "Route-line fix",
+  new_poi: "New point",
+  description_edit: "Text edit",
+  report: "Report",
+};
+
+function MySubmissions() {
   const data = useApp((s) => s.data)!;
   const list = data.contributions.slice().reverse();
-  const nameOf = (id?: string) => data.variants.find((v) => v.id === id)?.name ?? data.locations.find((l) => l.id === id)?.name ?? id ?? "";
+  const myMedia = data.media.filter((m) => m.source === "local");
+  const nameOf = (id?: string) =>
+    data.variants.find((v) => v.id === id)?.name ?? data.locations.find((l) => l.id === id)?.name ?? data.media.find((m) => m.id === id)?.title ?? id ?? "";
 
-  const preview = (c: Contribution) => {
+  const show = (c: Contribution) => {
     if (c.kind === "geometry_correction" && c.proposedGeometry && c.originalGeometry) {
-      app.set({
-        draw: { active: false, purpose: "route", coords: c.proposedGeometry.coordinates as Coord[], reference: c.originalGeometry.coordinates as Coord[] },
-      });
-      const [w, s, e, n] = bboxOf([...(c.proposedGeometry.coordinates as Coord[]), ...(c.originalGeometry.coordinates as Coord[])]);
-      getMap()?.fitBounds([[w, s], [e, n]], { padding: { top: 90, bottom: 60, left: 380, right: 460 }, duration: 1200 });
+      const coords = c.proposedGeometry.coordinates as Coord[];
+      app.set({ draw: { ...EMPTY_DRAW, coords, snapStatus: "snapped", reference: c.originalGeometry.coordinates as Coord[] } });
+      const [w, s, e, n] = bboxOf([...coords, ...(c.originalGeometry.coordinates as Coord[])]);
+      getMap()?.fitBounds([[w, s], [e, n]], { padding: { top: 90, bottom: 60, left: 380, right: 470 }, duration: 1200 });
     } else if (c.kind === "new_variant") {
       app.set({ draw: EMPTY_DRAW });
+      openDetail({ type: "variant", id: `var-${c.id}` });
       focusVariant(`var-${c.id}`);
     } else if (c.kind === "new_poi" && c.poi) {
       app.set({ draw: EMPTY_DRAW });
@@ -656,72 +768,69 @@ function ReviewQueue() {
   };
 
   return (
-    <PanelShell label="Local contribution queue">
-      <Header kicker="Moderation · local demo" title="Contribution queue" />
+    <PanelShell label="My submissions">
+      <Header kicker="Contributions · this browser" title="My submissions" />
       <div className="flex gap-2 border-b border-line bg-amber/5 px-3 py-2 text-[11px] leading-snug text-fg-dim">
         <ShieldAlert className="mt-0.5 size-3.5 shrink-0 text-amber" />
         <span>
-          Everything here was submitted from this browser. Approve/reject simulates a moderator so you can see the workflow — in production only
-          authorised reviewers can do this, server-side. Approving publishes content; it does <em>not</em> mark geometry as verified.
+          Road suggestions, fixes and reports wait for <span className="text-amber">review</span> and stay out of the main atlas until approved.
+          Reviewing needs accounts and moderators, which this prototype doesn&apos;t have yet — so these statuses won&apos;t change. Photos and
+          clips publish straight away.
         </span>
       </div>
       <div className="om-scroll min-h-0 flex-1 overflow-y-auto">
-        {list.length === 0 && <p className="px-3 py-8 text-center text-[12px] text-fg-faint">No contributions yet.</p>}
+        <div className="px-3 pt-3 pb-1">
+          <span className="om-label">Photos & clips · {myMedia.length}</span>
+        </div>
+        {myMedia.length === 0 ? (
+          <p className="px-3 pb-3 text-[12px] text-fg-faint">Open any road and use “Add photo or clip”.</p>
+        ) : (
+          <div className="grid grid-cols-4 gap-1 px-3 pb-3">
+            {myMedia.map((m, i) => (
+              <button
+                key={m.id}
+                onClick={() => app.set({ lightbox: { ids: myMedia.map((x) => x.id), index: i } })}
+                className="relative aspect-square overflow-hidden bg-panel-3"
+                aria-label={m.caption || m.title}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={m.thumbUrl} alt={m.caption || m.title} className="size-full object-cover" />
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="border-t border-line px-3 pt-3 pb-1">
+          <span className="om-label">Suggestions & reports · {list.length}</span>
+        </div>
+        {list.length === 0 && <p className="px-3 py-3 text-[12px] text-fg-faint">Nothing yet.</p>}
         <ul>
           {list.map((c) => (
-            <li key={c.id} className="border-b border-line px-3 py-3">
+            <li key={c.id} className="border-b border-line/60 px-3 py-2.5">
               <div className="flex items-center gap-2">
-                <span className="font-mono text-[10px] tracking-[0.1em] text-community uppercase">{c.kind.replace("_", " ")}</span>
+                <span className="font-mono text-[10px] tracking-[0.1em] text-community uppercase">{KIND_LABEL[c.kind]}</span>
                 <PublicationBadge status={c.status} />
-                {c.status === "published" && <Badge tone="ok">Published</Badge>}
                 <span className="ml-auto font-mono text-[10px] text-fg-faint">{c.submittedAt.slice(0, 16).replace("T", " ")}</span>
               </div>
               <div className="mt-1 text-[13px] text-fg">
-                {c.kind === "new_variant" && (c.variant?.name ?? "")}
+                {c.kind === "new_variant" && `${c.variant?.name} → ${c.newLocation ? `${c.newLocation.name} (new road)` : nameOf(c.locationId)}`}
                 {c.kind === "new_poi" && `${c.poi?.name} → ${nameOf(c.targetId)}`}
-                {c.kind === "geometry_correction" && `Geometry of ${nameOf(c.targetId)}`}
-                {c.kind === "description_edit" && `Description of ${nameOf(c.targetId)}`}
+                {c.kind === "geometry_correction" && `Route line of ${nameOf(c.targetId)}`}
+                {c.kind === "description_edit" && `Text of ${nameOf(c.targetId)}`}
+                {c.kind === "report" && c.report && `${REPORT_REASONS[c.report.reason as ReportReason]} — ${nameOf(c.report.subject.id)}`}
               </div>
-              {c.kind === "new_variant" && (
-                <div className="mt-0.5 font-mono text-[10.5px] text-fg-dim">
-                  on {c.newLocation ? `${c.newLocation.name} (new location)` : nameOf(c.locationId)} · {c.variant && formatKm(lineLength(c.variant.geometry.coordinates as Coord[]))}
-                </div>
-              )}
-              {c.kind === "geometry_correction" && c.originalGeometry && c.proposedGeometry && (
-                <div className="mt-0.5 font-mono text-[10.5px] text-fg-dim">
-                  original {formatKm(lineLength(c.originalGeometry.coordinates as Coord[]))} → proposed{" "}
-                  {formatKm(lineLength(c.proposedGeometry.coordinates as Coord[]))}
-                </div>
-              )}
-              {c.kind === "description_edit" && c.descriptionEdit && (
-                <div className="mt-1 space-y-1 text-[11.5px]">
-                  <p className="text-signal/80 line-through decoration-signal/40">{c.descriptionEdit.before}</p>
-                  <p className="text-ok/90">{c.descriptionEdit.after}</p>
-                </div>
-              )}
-              {c.note && <p className="mt-1 text-[11.5px] text-fg-dim italic">“{c.note}”</p>}
               {c.possibleDuplicates.length > 0 && (
                 <p className="mt-1 flex items-center gap-1.5 text-[11px] text-amber">
-                  <AlertTriangle className="size-3" /> Similar to: {c.possibleDuplicates.map(nameOf).join(", ")}
+                  <AlertTriangle className="size-3" /> Looks similar to: {c.possibleDuplicates.map(nameOf).join(", ")}
                 </p>
               )}
-              <div className="mt-2 flex gap-1.5">
-                {c.kind !== "description_edit" && (
-                  <Button size="sm" variant="ghost" onClick={() => preview(c)}>
-                    <Eye className="size-3" /> Show
-                  </Button>
-                )}
-                {c.status === "pending_review" && (
-                  <>
-                    <Button size="sm" onClick={() => reviewContribution(c.id, "published")}>
-                      <Check className="size-3" /> Approve
-                    </Button>
-                    <Button size="sm" variant="danger" onClick={() => reviewContribution(c.id, "rejected")}>
-                      <X className="size-3" /> Reject
-                    </Button>
-                  </>
-                )}
-              </div>
+              {["new_variant", "geometry_correction", "new_poi"].includes(c.kind) && (
+                <button
+                  onClick={() => show(c)}
+                  className="mt-1.5 flex items-center gap-1 font-mono text-[10px] tracking-[0.1em] text-fg-dim uppercase hover:text-ice"
+                >
+                  <Eye className="size-3" /> Show on map
+                </button>
+              )}
             </li>
           ))}
         </ul>
@@ -730,9 +839,9 @@ function ReviewQueue() {
         <Button
           variant="ghost"
           size="sm"
-          disabled={list.length === 0}
+          disabled={list.length === 0 && myMedia.length === 0}
           onClick={() => {
-            if (window.confirm("Remove all contributions stored in this browser?")) void resetLocalContributions();
+            if (window.confirm("Delete all suggestions, reports, photos and clips stored in this browser?")) void resetLocalContributions();
           }}
         >
           <RotateCcw className="size-3" /> Clear local data

@@ -19,7 +19,7 @@ export function StatusBar() {
   const pitch = useView((s) => s.pitch);
   const bearing = useView((s) => s.bearing);
   const visible = useView((s) => s.visibleVariantIds.length);
-  const total = useApp((s) => s.data?.variants.filter((v) => v.publication !== "rejected").length ?? 0);
+  const total = useApp((s) => s.data?.variants.filter((v) => v.publication === "published").length ?? 0);
   const style = useApp((s) => s.style);
   const region = useApp((s) => {
     const sel = s.selection;
@@ -95,7 +95,7 @@ export function MapControls() {
     <div
       className={cn(
         "pointer-events-auto absolute top-[68px] z-20 flex flex-col gap-1 transition-[right] duration-200",
-        rightOpen ? "right-3 md:right-[452px]" : "right-3",
+        rightOpen ? "right-3 md:right-[460px]" : "right-3",
       )}
     >
       {!exploreOpen && (
@@ -137,16 +137,17 @@ export function HoverCard() {
     const v = data.variants.find((x) => x.id === hover.id);
     if (!v) return null;
     const loc = data.locations.find((l) => l.id === v.locationId);
-    kicker = `${loc?.name ?? ""} · variant`;
+    kicker = `${loc?.name ?? ""} · route`;
     title = v.name;
     meta = `${ACTIVITY_LABEL[v.activity]} · ${formatKm(lineLength(v.geometry.coordinates as Coord[]))}${v.elevation ? ` · +${v.elevation.gainM} m` : ""}`;
   } else if (hover.type === "location") {
     const l = data.locations.find((x) => x.id === hover.id);
     if (!l) return null;
     const n = data.variants.filter((v) => v.locationId === l.id && v.publication !== "rejected").length;
-    kicker = `Location · ${l.countries.join("/")}`;
+    kicker = `Road · ${l.countries.join("/")}`;
     title = l.name;
-    meta = `${n} variant${n === 1 ? "" : "s"} · ${l.regions.slice(0, 2).join(", ")}`;
+    const media = data.media.filter((m) => m.attachedTo.id === l.id || data.variants.some((v) => v.locationId === l.id && v.id === m.attachedTo.id)).length;
+    meta = `${n} route${n === 1 ? "" : "s"}${media ? ` · ${media} photos & clips` : ""}`;
   } else {
     const p = data.pois.find((x) => x.id === hover.id);
     if (!p) return null;

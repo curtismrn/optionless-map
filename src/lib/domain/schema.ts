@@ -172,9 +172,40 @@ export const Poi = z
   .extend(Timestamps.shape);
 export type Poi = z.infer<typeof Poi>;
 
+// ---- Media ------------------------------------------------------------------
+// Photos and clips attach to a road record (location), one of its variants, or a POI.
+// Seed media come from Wikimedia Commons (real, openly licensed, attributed).
+// Local uploads live in this browser only (IndexedDB) until a storage backend exists.
+
+export const MediaKind = z.enum(["photo", "clip"]);
+export type MediaKind = z.infer<typeof MediaKind>;
+
+export const MediaItem = z.object({
+  id: z.string(),
+  attachedTo: z.object({ type: z.enum(["location", "variant", "poi"]), id: z.string() }),
+  kind: MediaKind,
+  source: z.enum(["commons", "local"]),
+  title: z.string(),
+  /** Display URL (Commons) — local items resolve an object URL at runtime. */
+  url: z.string().optional(),
+  thumbUrl: z.string().optional(),
+  width: z.number().optional(),
+  height: z.number().optional(),
+  caption: z.string().max(500).default(""),
+  credit: z.string(),
+  license: z.string(),
+  licenseUrl: z.string().nullable().optional(),
+  sourceUrl: z.string().optional(),
+  capturedAt: z.string().nullable().optional(),
+  createdAt: z.string().optional(),
+  /** Media publish immediately (no pre-moderation) but can be reported. */
+  status: z.enum(["published", "reported", "removed"]).default("published"),
+});
+export type MediaItem = z.infer<typeof MediaItem>;
+
 // ---- Contributions ----------------------------------------------------------
 
-export const ContributionKind = z.enum(["new_variant", "geometry_correction", "new_poi", "description_edit"]);
+export const ContributionKind = z.enum(["new_variant", "geometry_correction", "new_poi", "description_edit", "report"]);
 export type ContributionKind = z.infer<typeof ContributionKind>;
 
 export const NewLocationDraft = z.object({
@@ -215,6 +246,13 @@ export const Contribution = z.object({
     .object({ name: z.string(), coordinates: LngLat, category: PoiCategory, description: z.string(), communityLabel: z.boolean() })
     .optional(),
   descriptionEdit: z.object({ before: z.string(), after: z.string() }).optional(),
+  report: z
+    .object({
+      subject: z.object({ type: z.enum(["location", "variant", "poi", "media"]), id: z.string() }),
+      reason: z.enum(["incorrect_geometry", "duplicate", "wrong_information", "unsafe_or_illegal", "private_location", "copyright", "inappropriate", "other"]),
+      details: z.string().max(1000),
+    })
+    .optional(),
   note: z.string().max(1000).optional(),
   /** Variant ids whose geometry looks similar — flagged for review, never auto-merged. */
   possibleDuplicates: z.array(z.string()).default([]),

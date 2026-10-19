@@ -4,7 +4,7 @@
 // letting the map, which lives outside React's render cycle, read and write it.
 
 import { useSyncExternalStore } from "react";
-import type { AtlasSnapshot, ContributionInput } from "@/lib/repository/types";
+import type { AtlasSnapshot, ContributionInput, MediaInput } from "@/lib/repository/types";
 import { LocalDemoRepository } from "@/lib/repository/local";
 import { DEFAULT_FILTERS, type Filters } from "@/lib/search";
 import type { StyleId } from "@/components/map/styles";
@@ -12,20 +12,33 @@ import type { Coord } from "@/lib/geo";
 
 export type Selection = { type: "location" | "variant" | "poi"; id: string } | null;
 
+export type MediaTarget = { type: "location" | "variant" | "poi"; id: string };
+export type ReportSubject = { type: "location" | "variant" | "poi" | "media"; id: string };
+
 export type ContributeIntent =
+  | { kind: "add_media"; target: MediaTarget }
   | { kind: "new_variant"; locationId?: string }
   | { kind: "geometry_correction"; variantId: string }
   | { kind: "new_poi"; targetId: string }
   | { kind: "description_edit"; variantId: string }
-  | { kind: "review" };
+  | { kind: "report"; subject: ReportSubject }
+  | { kind: "my_submissions" };
 
 export interface DrawState {
   active: boolean;
   purpose: "route" | "poi";
+  /** Points the contributor placed (editable vertices). */
+  waypoints: Coord[];
+  /** Displayed / submitted geometry: road-snapped route through the waypoints, or the waypoints themselves. */
   coords: Coord[];
+  snap: boolean;
+  snapStatus: "idle" | "routing" | "snapped" | "unsnapped";
+  snapError: string | null;
   /** Geometry being corrected, shown underneath for comparison. */
   reference: Coord[] | null;
 }
+
+export type DetailTab = "overview" | "media" | "info";
 
 export interface AppState {
   data: AtlasSnapshot | null;
@@ -38,6 +51,10 @@ export interface AppState {
   exploreOpen: boolean;
   contribute: ContributeIntent | null;
   draw: DrawState;
+  detailTab: DetailTab;
+  /** Mobile bottom-sheet height. */
+  sheet: "peek" | "half" | "full";
+  lightbox: { ids: string[]; index: number } | null;
   toast: string | null;
   mapError: string | null;
 }
@@ -70,7 +87,16 @@ function createStore<T extends object>(initial: T) {
   };
 }
 
-export const EMPTY_DRAW: DrawState = { active: false, purpose: "route", coords: [], reference: null };
+export const EMPTY_DRAW: DrawState = {
+  active: false,
+  purpose: "route",
+  waypoints: [],
+  coords: [],
+  snap: true,
+  snapStatus: "idle",
+  snapError: null,
+  reference: null,
+};
 
 export const app = createStore<AppState>({
   data: null,
@@ -79,10 +105,13 @@ export const app = createStore<AppState>({
   query: "",
   filters: DEFAULT_FILTERS,
   style: "dark",
-  layers: { terrain: true, hillshade: true, density: true, pois: true, hairpins: true },
+  layers: { terrain: true, hillshade: true, density: true, pois: true, hairpins: false },
   exploreOpen: true,
   contribute: null,
   draw: EMPTY_DRAW,
+  detailTab: "overview",
+  sheet: "half",
+  lightbox: null,
   toast: null,
   mapError: null,
 });
@@ -118,9 +147,21 @@ export async function submitContribution(input: ContributionInput) {
   return c;
 }
 
-export async function reviewContribution(id: string, decision: "published" | "rejected") {
-  await repository.reviewContribution(id, decision);
+export async function addMedia(input: MediaInput) {
+  const m = await repository.addMedia(input);
   await loadData();
+  return m;
+}
+
+export async function removeOwnMedia(id: string) {
+  await repository.removeOwnMedia(id);
+  app.set({ lightbox: null });
+  await loadData();
+}
+
+/** Select a road record or variant and show its detail (mobile: half sheet). */
+export function openDetail(sel: NonNullable<Selection>, tab: DetailTab = "overview") {
+  app.set({ selection: sel, contribute: null, detailTab: tab, sheet: "half" });
 }
 
 export async function resetLocalContributions() {

@@ -1,8 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, MapPin, Route, CircleDot, Layers, SlidersHorizontal, List, Star } from "lucide-react";
-import { app, useApp, useView } from "@/lib/store";
+import { ChevronLeft, ChevronRight, Route, CircleDot, Layers, SlidersHorizontal, Compass, Star, Camera, Play, LocateFixed } from "lucide-react";
+import { app, useApp, useView, openDetail } from "@/lib/store";
 import {
   ACTIVITY_CODE,
   ACTIVITY_LABEL,
@@ -10,14 +10,16 @@ import {
   MOTORSPORT_ACTIVITIES,
   type Continent,
   type Location,
+  type MediaItem,
   type Variant,
 } from "@/lib/domain/schema";
-import { search, variantPasses, locationPasses, DEFAULT_FILTERS, type Filters, type SearchHit } from "@/lib/search";
-import { formatKm, lineLength, type Coord } from "@/lib/geo";
-import { focusLocation, focusPoint, focusVariant } from "@/components/map/controller";
-import { variantCodes } from "@/components/map/overlay";
+import { search, locationPasses, mediaIndex, DEFAULT_FILTERS, type Filters, type SearchHit } from "@/lib/search";
+import { bboxOf, haversine, type Coord } from "@/lib/geo";
+import { roadMedia } from "@/lib/media";
+import { focusLocation, focusPoint, focusVariant, getMap } from "@/components/map/controller";
+import { openLightbox } from "@/components/media/MediaGallery";
 import { StyleSelector } from "@/components/TopBar";
-import { Chip, cn, PublicationBadge, Badge } from "@/components/ui";
+import { Chip, cn } from "@/components/ui";
 import { COUNTRY_NAMES } from "@/data/seed";
 
 type Tab = "index" | "filters" | "layers";
@@ -25,11 +27,11 @@ type Tab = "index" | "filters" | "layers";
 const CONTINENTS: Continent[] = ["Europe", "Asia", "North America", "South America", "Africa", "Oceania"];
 
 function selectVariant(id: string) {
-  app.set({ selection: { type: "variant", id }, contribute: null });
+  openDetail({ type: "variant", id });
   focusVariant(id);
 }
 function selectLocation(id: string) {
-  app.set({ selection: { type: "location", id }, contribute: null });
+  openDetail({ type: "location", id });
   focusLocation(id);
 }
 
@@ -40,7 +42,7 @@ function activeFilterCount(f: Filters) {
     (f.verification !== "all" ? 1 : 0) +
     (f.entity !== "all" ? 1 : 0) +
     (f.withMedia ? 1 : 0) +
-    (!f.includePending ? 1 : 0)
+    (f.includePending ? 1 : 0)
   );
 }
 
@@ -67,7 +69,7 @@ export function ExplorePanel() {
   }
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode; badge?: number }[] = [
-    { id: "index", label: query ? "Results" : "Atlas", icon: <List className="size-3.5" /> },
+    { id: "index", label: query ? "Results" : "Discover", icon: <Compass className="size-3.5" /> },
     { id: "filters", label: "Filters", icon: <SlidersHorizontal className="size-3.5" />, badge: nFilters },
     { id: "layers", label: "Layers", icon: <Layers className="size-3.5" /> },
   ];
@@ -108,7 +110,7 @@ export function ExplorePanel() {
         </button>
       </div>
       <div className="om-scroll min-h-0 flex-1 overflow-y-auto">
-        {tab === "index" && (query ? <Results /> : <AtlasIndex />)}
+        {tab === "index" && (query ? <Results /> : <Discover />)}
         {tab === "filters" && <FiltersPane />}
         {tab === "layers" && <LayersPane />}
       </div>
@@ -118,56 +120,119 @@ export function ExplorePanel() {
 
 // ---------------------------------------------------------------------------
 
+type Data = NonNullable<ReturnType<typeof app.get>["data"]>;
+
+function coverOf(data: Data, locationId: string): MediaItem | undefined {
+  const media = roadMedia(data, locationId);
+  return media.find((m) => m.kind === "photo" && (m.width ?? 4) >= (m.height ?? 3)) ?? media[0];
+}
+
+function Thumb({ m, className }: { m?: MediaItem; className?: string }) {
+  return (
+    <span className={cn("relative block shrink-0 overflow-hidden bg-panel-3", !m && "om-hatch", className)}>
+      {m && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={m.thumbUrl ?? m.url} alt="" loading="lazy" className="absolute inset-0 size-full object-cover" />
+      )}
+    </span>
+  );
+}
+
+/** A road record as a card: cover, name, where, how many routes and media. */
+function RoadRow({ l, data, distanceKm, active }: { l: Location; data: Data; distanceKm?: number; active?: boolean }) {
+  const media = roadMedia(data, l.id);
+  const routes = data.variants.filter((v) => v.locationId === l.id && v.publication === "published").length;
+  const clips = media.filter((m) => m.kind === "clip").length;
+  return (
+    <button
+      onClick={() => selectLocation(l.id)}
+      className={cn("group flex w-full items-center gap-3 px-3 py-2 text-left", active ? "bg-ice/8" : "hover:bg-panel-2")}
+    >
+      <Thumb m={coverOf(data, l.id)} className="h-12 w-16" />
+      <span className="min-w-0 flex-1">
+        <span className="flex items-center gap-1.5">
+          {l.featured && <Star className="size-3 shrink-0 fill-amber text-amber" />}
+          <span className="truncate font-display text-[16px] leading-tight font-semibold tracking-[0.02em] text-fg group-hover:text-white">{l.name}</span>
+        </span>
+        <span className="mt-0.5 block truncate font-mono text-[10px] tracking-[0.04em] text-fg-faint uppercase">
+          {l.countries.map((c) => COUNTRY_NAMES[c] ?? c).join(" / ")}
+          {distanceKm !== undefined && ` · ${Math.round(distanceKm)} km away`}
+        </span>
+        <span className="mt-0.5 flex items-center gap-2.5 font-mono text-[10px] text-fg-dim tabular-nums">
+          <span>{routes} route{routes === 1 ? "" : "s"}</span>
+          {media.length > 0 ? (
+            <span className="flex items-center gap-1 text-ice">
+              <Camera className="size-3" /> {media.length - clips}
+              {clips > 0 && (
+                <>
+                  <Play className="ml-1 size-3" /> {clips}
+                </>
+              )}
+            </span>
+          ) : (
+            <span className="text-fg-faint">no media yet</span>
+          )}
+        </span>
+      </span>
+    </button>
+  );
+}
+
 function Results() {
   const query = useApp((s) => s.query);
   const filters = useApp((s) => s.filters);
   const data = useApp((s) => s.data);
   const hits = useMemo(() => (data ? search(query, data, filters) : []), [query, data, filters]);
   const nFilters = activeFilterCount(filters);
+  if (!data) return null;
 
   const go = (h: SearchHit) => {
     if (h.type === "location") selectLocation(h.id);
     else if (h.type === "variant") selectVariant(h.id);
     else {
-      app.set({ selection: { type: "poi", id: h.id }, contribute: null });
+      openDetail({ type: "poi", id: h.id });
       focusPoint(h.poi.coordinates as Coord);
     }
   };
 
   return (
-    <div className="px-1 py-2">
-      <div className="flex items-center justify-between px-2 pb-2">
+    <div className="py-2">
+      <div className="flex items-center justify-between px-3 pb-2">
         <span className="om-label">
-          {hits.length} match{hits.length === 1 ? "" : "es"} in dataset
+          {hits.length} match{hits.length === 1 ? "" : "es"}
         </span>
         {nFilters > 0 && <span className="om-label text-ice">{nFilters} filter{nFilters > 1 ? "s" : ""} active</span>}
       </div>
       {hits.length === 0 && (
-        <p className="px-2 py-6 text-center text-[12px] leading-relaxed text-fg-faint">
-          Nothing in the atlas matches “{query}”.
+        <p className="px-3 py-6 text-center text-[12px] leading-relaxed text-fg-faint">
+          No road in the atlas matches “{query}”.
           <br />
-          Search covers only mapped locations — there is no external geocoder in this prototype.
+          Search covers mapped roads only. Missing one?{" "}
+          <button className="text-ice hover:underline" onClick={() => app.set({ contribute: { kind: "new_variant" }, selection: null })}>
+            Suggest it
+          </button>
+          .
         </p>
       )}
       <ul>
         {hits.map((h) => (
           <li key={`${h.type}-${h.id}`}>
-            <button onClick={() => go(h)} className="group flex w-full items-start gap-2.5 px-2 py-2 text-left hover:bg-panel-2">
-              <span className="mt-0.5 text-fg-faint group-hover:text-ice">
-                {h.type === "location" ? <MapPin className="size-3.5" /> : h.type === "variant" ? <Route className="size-3.5" /> : <CircleDot className="size-3.5" />}
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="flex items-center gap-1.5">
-                  <span className="truncate text-[13px] text-fg">{h.type === "location" ? h.location.name : h.type === "variant" ? h.variant.name : h.poi.name}</span>
+            {h.type === "location" ? (
+              <RoadRow l={h.location} data={data} />
+            ) : (
+              <button onClick={() => go(h)} className="group flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-panel-2">
+                <span className="grid h-12 w-16 shrink-0 place-items-center border border-line text-fg-faint group-hover:text-ice">
+                  {h.type === "variant" ? <Route className="size-4" /> : <CircleDot className="size-4" />}
                 </span>
-                <span className="mt-0.5 block truncate font-mono text-[10px] tracking-[0.06em] text-fg-faint">
-                  {h.type === "location" && `LOCATION · ${h.location.countries.join("/")} · ${h.location.regions.slice(0, 2).join(", ")}`}
-                  {h.type === "variant" && `VARIANT OF ${h.location?.name.toUpperCase() ?? "—"} · ${ACTIVITY_LABEL[h.variant.activity].toUpperCase()}`}
-                  {h.type === "poi" && `POINT · ${h.poi.communityLabel ? "COMMUNITY LABEL" : h.poi.category.replace("_", " ").toUpperCase()}`}
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[13px] text-fg">{h.type === "variant" ? h.variant.name : h.poi.name}</span>
+                  <span className="mt-0.5 block truncate font-mono text-[10px] tracking-[0.04em] text-fg-faint uppercase">
+                    {h.type === "variant" && `Route on ${h.location?.name ?? "—"} · ${ACTIVITY_LABEL[h.variant.activity]}`}
+                    {h.type === "poi" && `Point · ${h.poi.communityLabel ? "local nickname" : h.poi.category.replace("_", " ")}`}
+                  </span>
                 </span>
-              </span>
-              {h.type === "variant" && <PublicationBadge status={h.variant.publication} />}
-            </button>
+              </button>
+            )}
           </li>
         ))}
       </ul>
@@ -175,125 +240,162 @@ function Results() {
   );
 }
 
-// ---------------------------------------------------------------------------
+const REGIONS: { id: Continent; label: string }[] = [
+  { id: "Europe", label: "Europe" },
+  { id: "Asia", label: "Japan & Asia" },
+  { id: "North America", label: "North America" },
+  { id: "South America", label: "South America" },
+  { id: "Oceania", label: "Oceania" },
+  { id: "Africa", label: "Africa" },
+];
 
-function AtlasIndex() {
+function flyToRegion(data: Data, continent: Continent) {
+  const ids = new Set(data.locations.filter((l) => l.continent === continent && l.publication === "published").map((l) => l.id));
+  const coords = data.variants.filter((v) => ids.has(v.locationId)).flatMap((v) => v.geometry.coordinates as Coord[]);
+  if (!coords.length) return;
+  const [w, s, e, n] = bboxOf(coords);
+  getMap()?.fitBounds([[w, s], [e, n]], { padding: { top: 120, bottom: 80, left: 400, right: 80 }, maxZoom: 9, duration: 2000 });
+}
+
+function Discover() {
   const data = useApp((s) => s.data);
   const filters = useApp((s) => s.filters);
   const selection = useApp((s) => s.selection);
   const visibleIds = useView((s) => s.visibleVariantIds);
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({ "loc-ibardin": true });
+  const [near, setNear] = useState<{ status: "idle" | "locating" | "ok" | "denied"; at?: Coord }>({ status: "idle" });
 
-  if (!data) return <div className="px-3 py-6 font-mono text-[10px] text-fg-faint">LOADING DATASET…</div>;
-  const codes = variantCodes(data.variants);
-  const locs = data.locations.filter((l) => locationPasses(l, data.variants, filters));
+  if (!data) return <div className="px-3 py-6 font-mono text-[10px] text-fg-faint">LOADING ATLAS…</div>;
+  const withMedia = mediaIndex(data.media);
+  const locs = data.locations.filter((l) => locationPasses(l, data.variants, filters, withMedia));
   const featured = locs.filter((l) => l.featured);
-  const rest = locs.filter((l) => !l.featured);
   const visibleSet = new Set(visibleIds);
-  const inView = data.variants.filter((v) => visibleSet.has(v.id));
-  const recent = data.contributions.slice().reverse().slice(0, 5);
+  const inViewLocs = locs.filter((l) => data.variants.some((v) => v.locationId === l.id && visibleSet.has(v.id)));
   const selLoc =
     selection?.type === "location" ? selection.id : selection?.type === "variant" ? data.variants.find((v) => v.id === selection.id)?.locationId : undefined;
+  const regionCounts = new Map<Continent, number>();
+  for (const l of locs) regionCounts.set(l.continent, (regionCounts.get(l.continent) ?? 0) + 1);
+  const latest = [...data.media.filter((m) => m.source === "local"), ...data.media.filter((m) => m.source === "commons" && m.capturedAt).sort((a, b) => (b.capturedAt ?? "").localeCompare(a.capturedAt ?? ""))]
+    .filter((m) => m.status !== "removed")
+    .slice(0, 6);
 
-  const renderLoc = (l: Location) => {
-    const vs = data.variants.filter((v) => v.locationId === l.id && variantPasses(v, l, filters));
-    const isOpen = expanded[l.id] ?? selLoc === l.id;
-    const totalKm = vs.reduce((a, v) => a + lineLength(v.geometry.coordinates as Coord[]), 0);
-    return (
-      <li key={l.id} className={cn("border-b border-line/60", selLoc === l.id && "bg-panel-2/60")}>
-        <div className="flex items-stretch">
-          <button
-            onClick={() => setExpanded((e) => ({ ...e, [l.id]: !isOpen }))}
-            className="px-2 text-fg-faint hover:text-fg"
-            aria-label={isOpen ? "Collapse variants" : "Expand variants"}
-            aria-expanded={isOpen}
-          >
-            <ChevronRight className={cn("size-3.5 transition-transform", isOpen && "rotate-90")} />
-          </button>
-          <button onClick={() => selectLocation(l.id)} className="group min-w-0 flex-1 py-2 pr-3 text-left">
-            <span className="flex items-center gap-1.5">
-              <MapPin className={cn("size-3.5 shrink-0", l.featured ? "text-amber" : "text-ice")} />
-              <span className="truncate font-display text-[16px] font-semibold tracking-[0.03em] text-fg group-hover:text-white">
-                {l.name}
-              </span>
-              <PublicationBadge status={l.publication} />
-            </span>
-            <span className="mt-0.5 flex items-center gap-2 pl-5 font-mono text-[10px] tracking-[0.06em] text-fg-faint">
-              <span>{l.countries.map((c) => COUNTRY_NAMES[c] ?? c).join(" / ").toUpperCase()}</span>
-              <span className="text-line-strong">|</span>
-              <span className="tabular-nums">{vs.length} VAR</span>
-              <span className="text-line-strong">|</span>
-              <span className="tabular-nums">{formatKm(totalKm).toUpperCase()}</span>
-            </span>
-          </button>
-        </div>
-        {isOpen && (
-          <ul className="relative mb-2 ml-[22px] border-l border-line-strong pl-0">
-            {vs.map((v) => (
-              <VariantRow key={v.id} v={v} code={codes.get(v.id) ?? ""} active={selection?.type === "variant" && selection.id === v.id} />
-            ))}
-          </ul>
-        )}
-      </li>
+  const locate = () => {
+    if (!navigator.geolocation) return setNear({ status: "denied" });
+    setNear({ status: "locating" });
+    navigator.geolocation.getCurrentPosition(
+      (p) => setNear({ status: "ok", at: [p.coords.longitude, p.coords.latitude] }),
+      () => setNear({ status: "denied" }),
+      { timeout: 10000, maximumAge: 300000 },
     );
   };
+  const nearby =
+    near.status === "ok" && near.at
+      ? locs.map((l) => ({ l, d: haversine(near.at!, l.center) / 1000 })).sort((a, b) => a.d - b.d).slice(0, 3)
+      : [];
 
   return (
-    <div>
-      {featured.length > 0 && (
+    <div className="pb-3">
+      <div className="px-3 pt-3">
+        <div className="om-label mb-2">Explore by region</div>
+        <div className="flex flex-wrap gap-1">
+          {REGIONS.filter((r) => regionCounts.has(r.id)).map((r) => (
+            <Chip key={r.id} onClick={() => flyToRegion(data, r.id)}>
+              {r.label} <span className="text-fg-faint">{regionCounts.get(r.id)}</span>
+            </Chip>
+          ))}
+          <Chip onClick={locate} className="flex items-center gap-1">
+            <LocateFixed className="size-3" /> {near.status === "locating" ? "Locating…" : "Near me"}
+          </Chip>
+        </div>
+        {near.status === "denied" && <p className="mt-1.5 text-[11px] text-fg-faint">Location unavailable or permission denied.</p>}
+      </div>
+      {nearby.length > 0 && (
         <>
-          <div className="flex items-center gap-1.5 px-3 pt-3 pb-1.5">
-            <Star className="size-3 text-amber" />
-            <span className="om-label">Featured · editorial selection</span>
+          <div className="px-3 pt-4 pb-1">
+            <span className="om-label">Closest to you</span>
           </div>
-          <ul>{featured.map(renderLoc)}</ul>
+          <ul>
+            {nearby.map(({ l, d }) => (
+              <li key={l.id}>
+                <RoadRow l={l} data={data} distanceKm={d} active={selLoc === l.id} />
+              </li>
+            ))}
+          </ul>
+          <p className="px-3 text-[10.5px] text-fg-faint">The demo atlas is small — the closest road may still be far away.</p>
         </>
       )}
-      <div className="px-3 pt-4 pb-1.5">
-        <span className="om-label">All locations · {locs.length}</span>
-      </div>
-      <ul>{rest.map(renderLoc)}</ul>
-      {locs.length === 0 && <p className="px-3 py-4 text-[12px] text-fg-faint">No locations match the active filters.</p>}
 
-      <div className="mt-2 flex items-center justify-between border-t border-line px-3 pt-3 pb-1.5">
-        <span className="om-label">In current view</span>
-        <span className="om-label tabular-nums">{inView.length}</span>
-      </div>
-      <ul className="pb-2">
-        {inView.slice(0, 8).map((v) => (
-          <li key={v.id}>
-            <button onClick={() => selectVariant(v.id)} className="flex w-full items-center gap-2 px-3 py-1 text-left hover:bg-panel-2">
-              <ActivityTag activity={v.activity} />
-              <span className="truncate text-[12px] text-fg-dim">{v.name}</span>
-            </button>
-          </li>
-        ))}
-        {inView.length > 8 && <li className="px-3 py-1 font-mono text-[10px] text-fg-faint">+{inView.length - 8} MORE — ZOOM IN</li>}
-      </ul>
+      {featured.length > 0 && (
+        <>
+          <div className="flex items-center gap-1.5 px-3 pt-4 pb-1">
+            <span className="om-label">Featured roads</span>
+          </div>
+          <ul>
+            {featured.map((l) => (
+              <li key={l.id}>
+                <RoadRow l={l} data={data} active={selLoc === l.id} />
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
 
-      <div className="flex items-center justify-between border-t border-line px-3 pt-3 pb-1.5">
-        <span className="om-label">Recent contributions · this browser</span>
+      {latest.length > 0 && (
+        <>
+          <div className="flex items-center justify-between px-3 pt-4 pb-1.5">
+            <span className="om-label">Latest photos & clips</span>
+          </div>
+          <div className="grid grid-cols-3 gap-1 px-3">
+            {latest.map((m, i) => {
+              const locId = m.attachedTo.type === "location" ? m.attachedTo.id : data.variants.find((v) => v.id === m.attachedTo.id)?.locationId;
+              const l = data.locations.find((x) => x.id === locId);
+              return (
+                <button
+                  key={m.id}
+                  onClick={() => openLightbox(latest, i)}
+                  className="group relative aspect-square overflow-hidden bg-panel-3"
+                  aria-label={`${m.kind === "clip" ? "Clip" : "Photo"} — ${l?.name ?? ""}`}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={m.thumbUrl ?? m.url} alt="" loading="lazy" className="absolute inset-0 size-full object-cover transition-transform group-hover:scale-105" />
+                  <span className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
+                  {m.kind === "clip" && <Play className="absolute top-1 left-1 size-3 fill-white text-white" />}
+                  <span className="absolute right-1 bottom-1 left-1 truncate font-mono text-[8.5px] tracking-[0.06em] text-white/85 uppercase">{l?.name}</span>
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      <div className="flex items-center justify-between px-3 pt-4 pb-1">
+        <span className="om-label">In the current view</span>
+        <span className="om-label tabular-nums">{inViewLocs.length}</span>
       </div>
-      {recent.length === 0 ? (
-        <p className="px-3 pb-4 text-[12px] leading-relaxed text-fg-faint">
-          None yet. Use <span className="text-fg-dim">Add road</span> to draw a route — it will appear here as pending review.
-        </p>
+      {inViewLocs.length === 0 ? (
+        <p className="px-3 pb-2 text-[12px] text-fg-faint">No mapped road here yet — pan the map or pick a region.</p>
       ) : (
-        <ul className="pb-3">
-          {recent.map((c) => (
-            <li key={c.id}>
-              <button
-                onClick={() => app.set({ contribute: { kind: "review" }, selection: null })}
-                className="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-panel-2"
-              >
-                <span className="font-mono text-[10px] text-community">{c.kind.replace("_", " ").toUpperCase()}</span>
-                <span className="min-w-0 flex-1 truncate text-[12px] text-fg-dim">{c.variant?.name ?? c.poi?.name ?? c.targetId}</span>
-                <PublicationBadge status={c.status} />
-              </button>
+        <ul>
+          {inViewLocs.slice(0, 6).map((l) => (
+            <li key={l.id}>
+              <RoadRow l={l} data={data} active={selLoc === l.id} />
             </li>
           ))}
         </ul>
       )}
+
+      <div className="px-3 pt-4 pb-1">
+        <span className="om-label">All roads · {locs.length}</span>
+      </div>
+      <ul>
+        {locs
+          .filter((l) => !l.featured)
+          .map((l) => (
+            <li key={l.id}>
+              <RoadRow l={l} data={data} active={selLoc === l.id} />
+            </li>
+          ))}
+      </ul>
+      {locs.length === 0 && <p className="px-3 py-4 text-[12px] text-fg-faint">No roads match the active filters.</p>}
     </div>
   );
 }
@@ -307,26 +409,6 @@ export function ActivityTag({ activity }: { activity: Variant["activity"] }) {
     >
       {ACTIVITY_CODE[activity]}
     </span>
-  );
-}
-
-function VariantRow({ v, code, active }: { v: Variant; code: string; active: boolean }) {
-  const km = lineLength(v.geometry.coordinates as Coord[]);
-  return (
-    <li className="relative">
-      <span className="absolute top-1/2 left-0 h-px w-2.5 bg-line-strong" />
-      <button
-        onClick={() => selectVariant(v.id)}
-        className={cn("ml-2.5 flex w-[calc(100%-10px)] items-center gap-2 py-1.5 pr-3 pl-1.5 text-left", active ? "bg-ice/8" : "hover:bg-panel-2")}
-      >
-        <span className={cn("w-5 font-mono text-[10px]", active ? "text-white" : "text-fg-faint")}>{code}</span>
-        <ActivityTag activity={v.activity} />
-        <span className={cn("min-w-0 flex-1 truncate text-[12px]", active ? "text-white" : "text-fg-dim")}>{v.name}</span>
-        {v.provenance.kind === "illustrative" && <Badge tone="signal" dashed>Concept</Badge>}
-        {v.publication !== "published" && <Badge tone="amber" dashed>Pending</Badge>}
-        <span className="font-mono text-[10px] text-fg-faint tabular-nums">{(km / 1000).toFixed(1)}</span>
-      </button>
-    </li>
   );
 }
 
@@ -395,7 +477,7 @@ function FiltersPane() {
             Has media
           </Chip>
           <Chip active={f.includePending} onClick={() => set({ includePending: !f.includePending })}>
-            Include pending
+            Show my pending suggestions
           </Chip>
         </div>
         {f.withMedia && <p className="mt-1.5 text-[11px] text-fg-faint">Media uploads are not live yet, so no route has media.</p>}

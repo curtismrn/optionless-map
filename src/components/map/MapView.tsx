@@ -12,7 +12,7 @@ import {
 } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import mlcontour from "maplibre-contour";
-import { app, view, type AppState } from "@/lib/store";
+import { app, view, openDetail, type AppState } from "@/lib/store";
 import { bboxOf, type BBox, type Coord } from "@/lib/geo";
 import { buildVectorStyle, buildSatelliteStyle, buildClassicStyle, IS_LIGHT, TERRARIUM, type StyleId } from "./styles";
 import { addOverlay, buildCollections, buildDraft, setData, HIT_LAYERS, LOCATION_LAYERS, POI_LAYERS } from "./overlay";
@@ -190,9 +190,9 @@ export default function MapView() {
       const s = app.get();
       if (s.draw.active) {
         if (dragIndex !== null) {
-          const coords = s.draw.coords.slice();
-          coords[dragIndex] = [e.lngLat.lng, e.lngLat.lat];
-          app.set({ draw: { ...s.draw, coords } });
+          const waypoints = s.draw.waypoints.slice();
+          waypoints[dragIndex] = [+e.lngLat.lng.toFixed(6), +e.lngLat.lat.toFixed(6)];
+          app.set({ draw: { ...s.draw, waypoints } });
           return;
         }
         const v = map.queryRenderedFeatures(e.point, { layers: ["om-draft-vertices"] })[0];
@@ -244,7 +244,7 @@ export default function MapView() {
       const v = map.queryRenderedFeatures(e.point, { layers: ["om-draft-vertices"] })[0];
       if (!v) return;
       const i = Number(v.properties.i);
-      app.set({ draw: { ...s.draw, coords: s.draw.coords.filter((_, k) => k !== i) } });
+      app.set({ draw: { ...s.draw, waypoints: s.draw.waypoints.filter((_, k) => k !== i) } });
     });
 
     map.on("click", async (e) => {
@@ -252,7 +252,7 @@ export default function MapView() {
       if (s.draw.active) {
         if (map.queryRenderedFeatures(e.point, { layers: ["om-draft-vertices"] }).length) return;
         const c: Coord = [+e.lngLat.lng.toFixed(6), +e.lngLat.lat.toFixed(6)];
-        app.set({ draw: { ...s.draw, coords: s.draw.purpose === "poi" ? [c] : [...s.draw.coords, c] } });
+        app.set({ draw: { ...s.draw, waypoints: s.draw.purpose === "poi" ? [c] : [...s.draw.waypoints, c] } });
         return;
       }
       const layers = [...POI_LAYERS, ...LOCATION_LAYERS, ...HIT_LAYERS].filter((l) => map.getLayer(l));
@@ -269,13 +269,13 @@ export default function MapView() {
       }
       const id = String(f.properties.id);
       if (f.layer.id === "om-poi") {
-        app.set({ selection: { type: "poi", id }, contribute: null });
+        openDetail({ type: "poi", id });
         focusPoint((f.geometry as GeoJSON.Point).coordinates as Coord, Math.max(map.getZoom(), 14));
       } else if (f.layer.id === "om-loc-point") {
-        app.set({ selection: { type: "location", id }, contribute: null });
+        openDetail({ type: "location", id });
         focusLocation(id);
       } else {
-        app.set({ selection: { type: "variant", id }, contribute: null });
+        openDetail({ type: "variant", id });
         if (map.getZoom() < 10) focusVariant(id);
       }
     });

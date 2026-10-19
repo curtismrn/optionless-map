@@ -3,11 +3,14 @@
 // Seed data is static. Contributions are kept in this browser's localStorage so
 // the demo survives a reload. This is NOT a shared database and NOT an identity
 // system: anyone can clear or edit it, nothing reaches other visitors, and the
-// "reviewer" action is a local simulation. Production needs a backend with
+// prototype has no reviewer: suggestions stay "pending review" until a real backend exists. Production needs a backend with
 // server-side validation, rate limiting, spam prevention and moderation.
 
+import mediaJson from "@/data/generated/media.json";
+import { listLocalMedia, putLocalMedia, deleteLocalMedia, clearLocalMedia, processFile } from "./localMedia";
 import {
   Contribution,
+  MediaItem,
   type Location,
   type Poi,
   type Variant,
@@ -15,7 +18,7 @@ import {
 import { SEED_LOCATIONS, SEED_POIS, SEED_VARIANTS } from "@/data/seed";
 import { overlapRatio, type Coord } from "@/lib/geo";
 import { z } from "zod";
-import type { AtlasRepository, AtlasSnapshot, ContributionInput } from "./types";
+import type { AtlasRepository, AtlasSnapshot, ContributionInput, MediaInput } from "./types";
 
 const KEY = "optionless.demo.contributions.v1";
 const ANON = { kind: "anonymous" as const, name: "Anonymous (this browser)" };
@@ -44,7 +47,7 @@ const slugify = (s: string) =>
   s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
 /** Project seed + contributions into the entities the map shows. */
-export function applyContributions(contribs: Contribution[]): Omit<AtlasSnapshot, "contributions"> {
+export function applyContributions(contribs: Contribution[]): Omit<AtlasSnapshot, "contributions" | "media"> {
   const locations: Location[] = [...SEED_LOCATIONS];
   const variants: Variant[] = SEED_VARIANTS.map((v) => ({ ...v }));
   const pois: Poi[] = [...SEED_POIS];
@@ -144,13 +147,18 @@ export function findPossibleDuplicates(coords: Coord[], variants: Variant[], ign
     .map((v) => v.id);
 }
 
+const SEED_MEDIA: MediaItem[] = z.array(MediaItem).parse((mediaJson as { items: unknown[] }).items);
+
 export class LocalDemoRepository implements AtlasRepository {
   readonly kind = "local-demo" as const;
   private contributions: Contribution[] = [];
 
   async load(): Promise<AtlasSnapshot> {
     this.contributions = readStored();
-    return { ...applyContributions(this.contributions), contributions: this.contributions };
+    const reported = new Set(this.contributions.filter((c) => c.kind === "report" && c.report?.subject.type === "media").map((c) => c.report!.subject.id));
+    const local = await listLocalMedia();
+    const media = [...local.slice().reverse(), ...SEED_MEDIA].map((m) => (reported.has(m.id) ? { ...m, status: "reported" as const } : m));
+    return { ...applyContributions(this.contributions), media, contributions: this.contributions };
   }
 
   async submitContribution(input: ContributionInput): Promise<Contribution> {
@@ -169,17 +177,34 @@ export class LocalDemoRepository implements AtlasRepository {
     return candidate;
   }
 
-  async reviewContribution(id: string, decision: "published" | "rejected"): Promise<Contribution> {
-    const c = this.contributions.find((x) => x.id === id);
-    if (!c) throw new Error("Contribution not found");
-    const next = { ...c, status: decision };
-    this.contributions = this.contributions.map((x) => (x.id === id ? next : x));
-    writeStored(this.contributions);
-    return next;
+  async addMedia(input: MediaInput): Promise<MediaItem> {
+    const p = await processFile(input.file);
+    const meta = MediaItem.parse({
+      id: uid("lm"),
+      attachedTo: input.attachedTo,
+      kind: p.kind,
+      source: "local",
+      title: input.file.name.replace(/.[a-z0-9]+$/i, ""),
+      width: p.width,
+      height: p.height,
+      caption: input.caption.trim(),
+      credit: input.credit.trim() || "Anonymous (this browser)",
+      license: input.license,
+      capturedAt: input.capturedAt || null,
+      createdAt: new Date().toISOString(),
+      status: "published",
+    });
+    await putLocalMedia(meta, p.blob, p.thumb);
+    return meta;
+  }
+
+  async removeOwnMedia(id: string): Promise<void> {
+    await deleteLocalMedia(id);
   }
 
   async resetLocal(): Promise<void> {
     this.contributions = [];
     writeStored([]);
+    await clearLocalMedia();
   }
 }

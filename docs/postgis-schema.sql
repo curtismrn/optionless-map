@@ -77,7 +77,7 @@ create index on pois using gist (geom);
 -- Every change arrives as a contribution; originals are never overwritten in place.
 create table contributions (
   id uuid primary key default gen_random_uuid(),
-  kind text not null check (kind in ('new_variant','geometry_correction','new_poi','description_edit')),
+  kind text not null check (kind in ('new_variant','geometry_correction','new_poi','description_edit','report')),
   status publication_status not null default 'pending_review',
   target_variant_id uuid references variants,
   target_location_id uuid references locations,
@@ -98,5 +98,25 @@ create table contributions (
 --   where ST_DWithin(geom, $1, 40)
 --     and ST_Length(ST_Intersection(ST_Buffer(geom, 40), $1::geography)) / ST_Length($1) > 0.6;
 
--- Future: media_items, vehicle_profiles, timed_sessions, timing_records,
+-- Photos & clips attached to a road, a variant or a point. Published immediately
+-- (they never alter the road record) but reportable; storage_key points at Supabase Storage.
+create table media_items (
+  id uuid primary key default gen_random_uuid(),
+  location_id uuid references locations on delete cascade,
+  variant_id uuid references variants on delete cascade,
+  poi_id uuid references pois on delete cascade,
+  kind text not null check (kind in ('photo','clip')),
+  storage_key text not null,
+  thumbnail_key text,
+  caption text not null default '',
+  credit text not null,
+  license text not null,
+  captured_at date,
+  status text not null default 'published' check (status in ('published','reported','removed')),
+  uploaded_by uuid references auth.users,
+  created_at timestamptz not null default now(),
+  check (num_nonnulls(location_id, variant_id, poi_id) = 1)
+);
+
+-- Future: vehicle_profiles, timed_sessions, timing_records,
 -- verification_records, moderation_reports — see src/lib/domain/future.ts.
