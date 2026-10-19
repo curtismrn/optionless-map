@@ -1,0 +1,122 @@
+@import "tailwindcss";
+
+/* ------------------------------------------------------------------------
+   OPTIONLESS design tokens
+   Ink-black instrument surfaces, hairline borders, one cold route colour
+   (ice), one warm marker colour (amber), a restrained signal red for
+   motorsport formats, and violet for community-submitted content.
+   ------------------------------------------------------------------------ */
+@theme {
+  --color-ink: #0a0c0e;
+  --color-panel: #0f1215;
+  --color-panel-2: #14181c;
+  --color-panel-3: #1a1f24;
+  --color-line: #222930;
+  --color-line-strong: #323b44;
+  --color-fg: #d9dfe3;
+  --color-fg-dim: #8c979f;
+  --color-fg-faint: #5c6770;
+  --color-ice: #8fd6ea;
+  --color-ice-dim: #3d6672;
+  --color-amber: #e6a43c;
+  --color-signal: #e0664c;
+  --color-community: #b8a6f2;
+  --color-ok: #8fcf9a;
+
+  --font-sans: var(--font-plex), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
+  --font-display: var(--font-barlow), var(--font-plex), sans-serif;
+
+  --text-2xs: 0.625rem;
+  --text-2xs--line-height: 0.875rem;
+
+  --animate-in: om-in 180ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  --animate-sheet: om-sheet 220ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+@keyframes om-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes om-sheet {
+  from { opacity: 0; transform: translateX(12px); }
+  to { opacity: 1; transform: none; }
+}
+
+html, body {
+  height: 100%;
+  background: var(--color-ink);
+  color: var(--color-fg);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection { background: color-mix(in srgb, var(--color-ice) 35%, transparent); }
+
+/* Custom classes live in the components layer so Tailwind utilities can override them. */
+@layer components {
+  /* Hairline scrollbars */
+  .om-scroll { scrollbar-width: thin; scrollbar-color: var(--color-line-strong) transparent; }
+  .om-scroll::-webkit-scrollbar { width: 6px; }
+  .om-scroll::-webkit-scrollbar-thumb { background: var(--color-line-strong); }
+  
+  /* Technical label: small caps, tracked mono */
+  .om-label {
+    font-family: var(--font-mono);
+    font-size: 0.625rem;
+    line-height: 0.875rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--color-fg-faint);
+  }
+  
+  /* Instrument panel surface */
+  .om-panel {
+    background: color-mix(in srgb, var(--color-panel) 94%, transparent);
+    border: 1px solid var(--color-line);
+    backdrop-filter: blur(10px);
+  }
+  
+  /* Registration marks on panel corners — a nod to print production */
+  .om-ticks { position: relative; }
+  .om-ticks::before, .om-ticks::after {
+    content: "";
+    position: absolute;
+    width: 7px;
+    height: 7px;
+    border-color: var(--color-fg-faint);
+    pointer-events: none;
+  }
+  .om-ticks::before { top: -1px; left: -1px; border-top: 1px solid; border-left: 1px solid; }
+  .om-ticks::after { bottom: -1px; right: -1px; border-bottom: 1px solid; border-right: 1px solid; }
+  
+  /* Diagonal hatching for placeholder/cover areas */
+  .om-hatch {
+    background-image: repeating-linear-gradient(135deg, transparent 0 7px, color-mix(in srgb, var(--color-line) 70%, transparent) 7px 8px);
+  }
+}
+
+:focus-visible { outline: 1px solid var(--color-ice); outline-offset: 2px; }
+
+/* ---- MapLibre control restyle ---- */
+.maplibregl-ctrl-bottom-left, .maplibregl-ctrl-bottom-right { bottom: 30px !important; }
+.maplibregl-ctrl-scale {
+  background: color-mix(in srgb, var(--color-panel) 85%, transparent) !important;
+  border-color: var(--color-fg-dim) !important;
+  color: var(--color-fg-dim) !important;
+  font-family: var(--font-mono);
+  font-size: 10px !important;
+  letter-spacing: 0.06em;
+}
+.maplibregl-ctrl-attrib {
+  background: color-mix(in srgb, var(--color-panel) 85%, transparent) !important;
+  color: var(--color-fg-faint) !important;
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+.maplibregl-ctrl-attrib a { color: var(--color-fg-dim) !important; }
+.maplibregl-ctrl-attrib-button { filter: invert(1) opacity(0.6); }
+.maplibregl-ctrl-attrib.maplibregl-compact { background: color-mix(in srgb, var(--color-panel) 85%, transparent) !important; }
+@media (max-width: 767px) {
+  .maplibregl-ctrl-bottom-left, .maplibregl-ctrl-bottom-right { bottom: 58px !important; }
+}
