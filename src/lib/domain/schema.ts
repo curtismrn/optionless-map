@@ -132,6 +132,8 @@ export const Variant = z
     verification: VerificationStatus,
     publication: PublicationStatus,
     provenance: Provenance,
+    /** Points the route was drawn through; re-routed along OSM roads when the line is edited. */
+    waypoints: z.array(LngLat).optional(),
     /** Turning points >= 150° detected from geometry (heuristic, not authoritative). */
     detectedHairpins: z.array(LngLat).default([]),
     createdBy: Actor,
@@ -184,7 +186,8 @@ export const MediaItem = z.object({
   id: z.string(),
   attachedTo: z.object({ type: z.enum(["location", "variant", "poi"]), id: z.string() }),
   kind: MediaKind,
-  source: z.enum(["commons", "local"]),
+  /** commons = seed file on Wikimedia Commons; local = this browser only (demo mode); upload = shared storage */
+  source: z.enum(["commons", "local", "upload"]),
   title: z.string(),
   /** Display URL (Commons) — local items resolve an object URL at runtime. */
   url: z.string().optional(),
@@ -294,3 +297,43 @@ export const POI_LABEL: Record<PoiCategory, string> = {
   summit: "Summit / col",
   other: "Other",
 };
+
+// ---- Direct editing (friends-only shared mode) ------------------------------
+
+export const LocationInput = z.object({
+  name: z.string().trim().min(2, "Name is too short").max(120),
+  summary: z.string().trim().max(1000),
+  countries: z.array(z.string().length(2)).min(1, "Pick at least one country"),
+  regions: z.array(z.string().trim().min(1)).max(10),
+  continent: Continent,
+  center: LngLat,
+  tags: z.array(z.string().trim().min(1)).max(20),
+  featured: z.boolean(),
+});
+export type LocationInput = z.infer<typeof LocationInput>;
+
+export const VariantInput = z.object({
+  locationId: z.string().min(1, "Choose a road"),
+  name: z.string().trim().min(2, "Name is too short").max(120),
+  description: z.string().trim().max(2000),
+  activity: ActivityType,
+  direction: Direction,
+  directionNote: z.string().trim().max(200).optional(),
+  surface: z.string().trim().max(60).optional(),
+  countries: z.array(z.string().length(2)),
+  regions: z.array(z.string()),
+  geometry: LineStringGeometry,
+  waypoints: z.array(LngLat).min(2).max(25).optional(),
+  elevation: ElevationStats.optional(),
+  detectedHairpins: z.array(LngLat).optional(),
+});
+export type VariantInput = z.infer<typeof VariantInput>;
+
+export const PhotoUpdate = z.object({
+  caption: z.string().trim().max(500),
+  credit: z.string().trim().max(120),
+  license: z.string().trim().min(1).max(60),
+  capturedAt: z.string().nullable().optional(),
+  attachedTo: z.object({ type: z.enum(["location", "variant", "poi"]), id: z.string() }),
+});
+export type PhotoUpdate = z.infer<typeof PhotoUpdate>;

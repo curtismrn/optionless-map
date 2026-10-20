@@ -1,4 +1,4 @@
-import type { Contribution, Location, MediaItem, Poi, Variant } from "@/lib/domain/schema";
+import type { Contribution, Location, MediaItem, Poi, Variant, LocationInput, VariantInput, PhotoUpdate } from "@/lib/domain/schema";
 
 export interface AtlasSnapshot {
   locations: Location[];
@@ -37,4 +37,33 @@ export interface AtlasRepository {
   addMedia(input: MediaInput): Promise<MediaItem>;
   removeOwnMedia(id: string): Promise<void>;
   resetLocal(): Promise<void>;
+}
+
+// ---- Direct editing (friends-only shared mode) ------------------------------
+
+export interface EditEntry {
+  id: number;
+  table: "locations" | "variants" | "pois" | "photos";
+  rowId: string;
+  action: "insert" | "update" | "delete" | "restore";
+  label: string;
+  actor: string;
+  at: string;
+}
+
+/**
+ * Members change the shared atlas directly: no approval step. Every write is
+ * checked by Row Level Security in the database and logged in `edits`, from
+ * which any change can be restored.
+ */
+export interface AtlasEditor {
+  saveLocation(input: LocationInput, id?: string): Promise<string>;
+  deleteLocation(id: string): Promise<void>;
+  saveVariant(input: VariantInput, id?: string): Promise<string>;
+  deleteVariant(id: string): Promise<void>;
+  addPhoto(input: MediaInput): Promise<void>;
+  updatePhoto(id: string, patch: PhotoUpdate): Promise<void>;
+  deletePhoto(id: string): Promise<void>;
+  listEdits(limit?: number): Promise<EditEntry[]>;
+  restoreEdit(id: number): Promise<void>;
 }

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { X, Upload, ImagePlus, Info } from "lucide-react";
 import { app, useApp, addMedia, openDetail, toast, type MediaTarget } from "@/lib/store";
+import { SHARED_MODE } from "@/lib/supabase";
 import type { MediaInput } from "@/lib/repository/types";
 import { PanelShell } from "@/components/PanelShell";
 import { Button, Field, inputCls, cn } from "@/components/ui";
@@ -12,7 +13,8 @@ const LICENSES: MediaInput["license"][] = ["CC BY 4.0", "CC BY-SA 4.0", "CC0", "
 /**
  * Adding media to an existing road is deliberately light: pick a file, say
  * where it was taken, confirm rights. No review queue — media publish at once
- * and can be reported. (Prototype: stored in this browser only.)
+ * Shared mode: uploaded to the private Storage bucket, visible to all members.
+ * Demo mode: stored in this browser only.
  */
 export function AddMediaPanel({ target }: { target: MediaTarget }) {
   const data = useApp((s) => s.data)!;
@@ -62,7 +64,7 @@ export function AddMediaPanel({ target }: { target: MediaTarget }) {
     setErr("");
     try {
       await addMedia({ attachedTo: { type, id }, file, caption, credit, license, capturedAt: capturedAt || undefined });
-      toast("Photo added — visible in this browser only (not shared with others yet).");
+      toast(SHARED_MODE ? "Photo added — every member can see it now." : "Photo added — visible in this browser only (not shared with others yet).");
       if (type !== "poi") openDetail({ type, id }, "media");
       else app.set({ contribute: null });
     } catch (e) {
@@ -167,7 +169,8 @@ export function AddMediaPanel({ target }: { target: MediaTarget }) {
         </label>
         <p className="flex gap-1.5 text-[11px] leading-snug text-fg-faint">
           <Info className="mt-0.5 size-3 shrink-0" />
-Photos are re-encoded on your device (removes EXIF and GPS data). They are stored in this browser only — your friends won&apos;t see them until a shared backend exists.
+Photos are re-encoded on your device (removes EXIF and GPS data, max 2048 px).{" "}
+          {SHARED_MODE ? "Uploaded to the shared atlas — visible to all members." : "Local demo: stored in this browser only — your friends won’t see it."}
         </p>
         {err && <p className="text-[11.5px] text-signal">{err}</p>}
       </div>
@@ -178,7 +181,7 @@ Photos are re-encoded on your device (removes EXIF and GPS data). They are store
         </Button>
         <div className="flex-1" />
         <Button variant="solid" disabled={busy || !file} onClick={submit}>
-          <Upload className="size-3.5" /> {busy ? "Processing…" : "Add photo"}
+          <Upload className="size-3.5" /> {busy ? (SHARED_MODE ? "Uploading…" : "Processing…") : "Add photo"}
         </Button>
       </div>
     </PanelShell>

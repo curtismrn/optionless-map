@@ -11,9 +11,13 @@
     "typecheck": "tsc --noEmit",
     "test": "node --test \"tests/*.test.ts\"",
     "data:fetch": "node scripts/fetch-routes.mjs",
-    "data:media": "node scripts/fetch-media.mjs && node scripts/curate-media.mjs"
+    "data:media": "node scripts/fetch-media.mjs && node scripts/curate-media.mjs",
+    "db:setup": "node scripts/db-setup.mjs",
+    "invite": "node scripts/invite.mjs",
+    "test:shared": "node scripts/e2e-shared.mjs"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.117.2",
     "lucide-react": "^1.59.0",
     "maplibre-contour": "^0.1.1",
     "maplibre-gl": "^6.15.0",
@@ -29,6 +33,7 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "pngjs": "^7.0.0",
+    "postgres": "^3.4.7",
     "tailwindcss": "^4.3.3",
     "typescript": "^5.9.3"
   }

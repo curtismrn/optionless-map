@@ -4,8 +4,10 @@
 // letting the map, which lives outside React's render cycle, read and write it.
 
 import { useSyncExternalStore } from "react";
-import type { AtlasSnapshot, ContributionInput, MediaInput } from "@/lib/repository/types";
+import type { AtlasRepository, AtlasEditor, AtlasSnapshot, ContributionInput, MediaInput } from "@/lib/repository/types";
 import { LocalDemoRepository } from "@/lib/repository/local";
+import { SharedRepository } from "@/lib/repository/shared";
+import { SHARED_MODE, supabase } from "@/lib/supabase";
 import { DEFAULT_FILTERS, type Filters } from "@/lib/search";
 import type { StyleId } from "@/components/map/styles";
 import type { Coord } from "@/lib/geo";
@@ -22,7 +24,21 @@ export type ContributeIntent =
   | { kind: "new_poi"; targetId: string }
   | { kind: "description_edit"; variantId: string }
   | { kind: "report"; subject: ReportSubject }
-  | { kind: "my_submissions" };
+  | { kind: "my_submissions" }
+  // shared (friends) mode — direct edits
+  | { kind: "edit_location"; id?: string }
+  | { kind: "edit_variant"; id?: string; locationId?: string }
+  | { kind: "history" };
+
+/**
+ * disabled   – no Supabase configured: local demo mode
+ * signed_out – shared mode, not signed in
+ * member     – signed in and on the members list: can edit
+ * not_member – signed in but not invited (should not happen: sign-up is disabled)
+ */
+export type AuthState =
+  | { status: "disabled" | "loading" | "signed_out" | "not_member"; email?: string }
+  | { status: "member"; email: string; name: string; userId: string };
 
 export interface DrawState {
   active: boolean;
@@ -59,6 +75,10 @@ export interface AppState {
   pick: { x: number; y: number; ids: string[] } | null;
   toast: string | null;
   mapError: string | null;
+  auth: AuthState;
+  /** Shared mode: may anonymous visitors read? (atlas_settings.public_read) */
+  publicRead: boolean;
+  loadError: string | null;
 }
 
 export interface ViewState {
@@ -117,6 +137,9 @@ export const app = createStore<AppState>({
   pick: null,
   toast: null,
   mapError: null,
+  auth: { status: SHARED_MODE ? "loading" : "disabled" },
+  publicRead: false,
+  loadError: null,
 });
 
 export const view = createStore<ViewState>({
@@ -138,10 +161,87 @@ export function useView<U>(sel: (s: ViewState) => U): U {
 
 // ---- repository-backed actions ---------------------------------------------
 
-export const repository = new LocalDemoRepository();
+export const repository: AtlasRepository = SHARED_MODE ? new SharedRepository(supabase()) : new LocalDemoRepository();
+/** Direct-editing API — only in shared mode. */
+export const editor: AtlasEditor | null = repository instanceof SharedRepository ? repository : null;
 
 export async function loadData() {
-  app.set({ data: await repository.load() });
+  try {
+    app.set({ data: await repository.load(), loadError: null });
+  } catch (e) {
+    app.set({ loadError: e instanceof Error ? e.message : "Loading failed" });
+  }
+}
+
+export const canEdit = (s: AppState) => s.auth.status === "member";
+export function useCanEdit() {
+  return useApp(canEdit);
+}
+
+// ---- shared mode: auth + realtime -------------------------------------------
+
+let started = false;
+/** Wire up session tracking and live refresh (once, client side). */
+export function startShared() {
+  if (!SHARED_MODE || started) return;
+  started = true;
+  const sb = supabase();
+
+  const resolve = async (session: { user: { id: string; email?: string } } | null) => {
+    if (!session) {
+      app.set({ auth: { status: "signed_out" } });
+    } else {
+      const { data } = await sb.from("members").select("display_name").eq("user_id", session.user.id).maybeSingle();
+      app.set({
+        auth: data
+          ? { status: "member", email: session.user.email ?? "", name: data.display_name as string, userId: session.user.id }
+          : { status: "not_member", email: session.user.email },
+      });
+    }
+    const { data: st } = await sb.from("atlas_settings").select("public_read").maybeSingle();
+    app.set({ publicRead: !!st?.public_read });
+    await loadData();
+  };
+  sb.auth.getSession().then(({ data }) => resolve(data.session));
+  sb.auth.onAuthStateChange((event, session) => {
+    if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "USER_UPDATED") void resolve(session);
+  });
+
+  // Someone else saved → reload (debounced). Realtime respects RLS.
+  let t: ReturnType<typeof setTimeout> | undefined;
+  const refresh = () => {
+    clearTimeout(t);
+    t = setTimeout(() => void loadData(), 400);
+  };
+  const ch = sb.channel("atlas-changes");
+  for (const table of ["locations", "variants", "pois", "photos"]) ch.on("postgres_changes", { event: "*", schema: "public", table }, refresh);
+  ch.subscribe();
+}
+
+export async function sendMagicLink(email: string) {
+  const { error } = await supabase().auth.signInWithOtp({
+    email: email.trim().toLowerCase(),
+    // invitation only: unknown addresses are refused instead of creating accounts
+    options: { shouldCreateUser: false, emailRedirectTo: window.location.origin },
+  });
+  if (error) {
+    if (/signups? not allowed|not found|Invalid login/i.test(error.message)) throw new Error("This email hasn't been invited to the atlas.");
+    if (/rate limit|security purposes/i.test(error.message)) throw new Error("Too many links requested — wait a minute and try again.");
+    throw new Error(error.message);
+  }
+}
+
+export async function signOut() {
+  await supabase().auth.signOut();
+}
+
+/** Run an edit, then reload so the map shows what is now in the shared database. */
+export async function runEdit<T>(fn: (e: AtlasEditor) => Promise<T>, done?: string): Promise<T> {
+  if (!editor) throw new Error("Editing needs the shared atlas (Supabase) to be configured.");
+  const r = await fn(editor);
+  await loadData();
+  if (done) toast(done);
+  return r;
 }
 
 export async function submitContribution(input: ContributionInput) {
@@ -158,6 +258,7 @@ export async function addMedia(input: MediaInput) {
 
 export async function removeOwnMedia(id: string) {
   await repository.removeOwnMedia(id);
+  if (editor) toast("Photo removed — undo from History if that was a mistake.");
   app.set({ lightbox: null });
   await loadData();
 }

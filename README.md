@@ -87,3 +87,25 @@ These are free public services with no SLA. Refresh the data with `npm run data:
 ## Honesty rules
 
 No invented ratings, users, events or activity. "Featured" is an editorial flag. Concept content (the Ibardin hill-climb format, the "Virage de la mort" nickname) is labeled. No racing spots are labeled on public roads.
+
+## Shared atlas for friends (Supabase) — ⚠️ not yet tested end-to-end
+
+The code for a friends-only shared mode is in place, but **it has not been run against a real Supabase project yet**. Until `npm run test:shared` passes, treat it as untested. Without Supabase configuration, the app runs the local demo exactly as before.
+
+What it adds when configured:
+
+- Invite-only sign-in by email magic link. There is no self-registration; members are listed in `public.members`.
+- Members create, edit and delete roads, routes (OSM-routed lines, waypoints kept) and photos. Changes go live immediately for everyone, with a realtime refresh.
+- Row Level Security on every table. Writes are members-only, and reads are members-only unless `atlas_settings.public_read = true`. Photos go to a private Storage bucket (JPEG/PNG/WebP, 10 MB max).
+- Every change is logged in `public.edits`. **Edit → History & undo** restores any change.
+
+Setup:
+
+1. Create a free project on supabase.com.
+2. Configure authentication:
+   - Under **Authentication → Sign In / Providers**, keep Email on and **turn off "Allow new users to sign up"**.
+   - Under **URL Configuration**, add your site URL (e.g. `http://localhost:3000`) to the Site URL and the Redirect URLs.
+3. Copy `.env.example` to `.env.local` and fill in `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` and `SUPABASE_DB_URL`. The last two are for local scripts only and must never be exposed to the browser.
+4. Run `npm run db:setup` to apply `supabase/migrations/` and seed the demo atlas. It is idempotent and never duplicates or overwrites rows.
+5. Run `npm run invite -- friend@example.com "Name"` for each friend.
+6. Run `npm run test:shared`. It runs two member sessions plus an anonymous visitor through creation and editing, photos, RLS denials, validation errors and undo, then cleans up.

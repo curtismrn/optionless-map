@@ -4,8 +4,9 @@
 //   name & place → routes on this road → distance & elevation → photos → (collapsed) details & sources
 
 import { useMemo, useState } from "react";
-import { X, ArrowLeft, Video, Camera, Flag, Spline, PencilLine, MapPinPlus, ChevronDown, ChevronRight } from "lucide-react";
-import { app, useApp, view, openDetail } from "@/lib/store";
+import { X, ArrowLeft, Video, Camera, Flag, Spline, PencilLine, MapPinPlus, ChevronDown, ChevronRight, Pencil, Plus } from "lucide-react";
+import { app, useApp, view, openDetail, useCanEdit } from "@/lib/store";
+import { SHARED_MODE } from "@/lib/supabase";
 import { ACTIVITY_LABEL, POI_LABEL, type Location, type Poi, type Variant, type Contribution, type MediaItem } from "@/lib/domain/schema";
 import { formatCoord, formatKm, lineLength, sliceByDistance, type Coord } from "@/lib/geo";
 import { focusLocation, focusPoint, focusVariant, highlightRoute } from "@/components/map/controller";
@@ -112,6 +113,21 @@ function SmallActions({ items }: { items: [React.ReactNode, string, () => void][
   );
 }
 
+/** Members of the shared atlas edit directly — shown under the header. */
+function MemberBar({ items }: { items: [React.ReactNode, string, () => void][] }) {
+  const can = useCanEdit();
+  if (!can) return null;
+  return (
+    <div className="flex flex-wrap gap-1.5 border-b border-line px-3 py-2">
+      {items.map(([icon, label, fn]) => (
+        <Button key={label} size="sm" onClick={fn}>
+          {icon} {label}
+        </Button>
+      ))}
+    </div>
+  );
+}
+
 function History({ contributions, created }: { contributions: Contribution[]; created: { by: string; at: string } }) {
   return (
     <ol className="space-y-1 text-[11.5px] text-fg-dim">
@@ -128,6 +144,16 @@ function History({ contributions, created }: { contributions: Contribution[]; cr
 }
 
 /** Photos with a show-more toggle; every grid tile says where it belongs when that differs. */
+function AddPhotoButton({ onClick }: { onClick: () => void }) {
+  const can = useCanEdit();
+  if (SHARED_MODE && !can) return null;
+  return (
+    <Button size="sm" onClick={onClick}>
+      <Camera className="size-3" /> Add photo
+    </Button>
+  );
+}
+
 function Photos({ items, labelFor, onAdd, emptyText }: { items: MediaItem[]; labelFor?: (m: MediaItem) => string | undefined; onAdd: () => void; emptyText?: string }) {
   const [all, setAll] = useState(false);
   if (!items.length) return <EmptyMedia onAdd={onAdd} text={emptyText} />;
@@ -202,6 +228,12 @@ function RoadDetail({ l }: { l: Location }) {
   return (
     <PanelShell label={`Road: ${l.name}`}>
       <Header kicker="Road" title={l.name} subtitle={`${countries(l.countries)} · ${l.regions.slice(0, 2).join(", ")}`} />
+      <MemberBar
+        items={[
+          [<Pencil key="e" className="size-3" />, "Edit road", () => app.set({ contribute: { kind: "edit_location", id: l.id } })],
+          [<Plus key="a" className="size-3" />, "Add route", () => app.set({ contribute: { kind: "edit_variant", locationId: l.id } })],
+        ]}
+      />
       <div className="om-scroll min-h-0 flex-1 overflow-y-auto">
         <Block title={`${variants.length} route${variants.length === 1 ? "" : "s"} on this road`} aside={<span className="text-[11px] text-fg-faint">Pick one to highlight it</span>}>
           <ul className="space-y-1">
@@ -225,11 +257,7 @@ function RoadDetail({ l }: { l: Location }) {
 
         <Block
           title={`Photos · ${photos.length}`}
-          aside={
-            <Button size="sm" onClick={addPhoto}>
-              <Camera className="size-3" /> Add photo
-            </Button>
-          }
+          aside={<AddPhotoButton onClick={addPhoto} />}
         >
           <Photos items={photos} labelFor={routeName} onAdd={addPhoto} />
         </Block>
@@ -258,13 +286,13 @@ function RoadDetail({ l }: { l: Location }) {
             {l.provenance.source}. Route lines are OSM-derived and unverified. Photos come from Wikimedia Commons (credited on each) or were added in this browser.
           </p>
           <History contributions={contributions} created={{ by: l.createdBy.name, at: l.createdAt }} />
-          <SmallActions
+          {!SHARED_MODE && <SmallActions
             items={[
               [<MapPinPlus key="p" className="size-3.5" />, "Add a point", () => app.set({ contribute: { kind: "new_poi", targetId: l.id } })],
               [<Spline key="s" className="size-3.5" />, "Suggest a missing route", () => app.set({ contribute: { kind: "new_variant", locationId: l.id } })],
               [<Flag key="f" className="size-3.5" />, "Report a problem", () => app.set({ contribute: { kind: "report", subject: { type: "location", id: l.id } } })],
             ]}
-          />
+          />}
         </Details>
       </div>
     </PanelShell>
@@ -305,6 +333,7 @@ function VariantDetail({ v }: { v: Variant }) {
           }
         }
       />
+      <MemberBar items={[[<Pencil key="e" className="size-3" />, "Edit route", () => app.set({ contribute: { kind: "edit_variant", id: v.id } })]]} />
       <div className="om-scroll min-h-0 flex-1 overflow-y-auto">
         {(v.publication !== "published" || v.provenance.kind === "illustrative") && (
           <p className="border-b border-line bg-amber/5 px-3 py-2 text-[12px] leading-snug text-fg-dim">
@@ -341,11 +370,7 @@ function VariantDetail({ v }: { v: Variant }) {
 
         <Block
           title={`Photos of this route · ${own.length}`}
-          aside={
-            <Button size="sm" onClick={addPhoto}>
-              <Camera className="size-3" /> Add photo
-            </Button>
-          }
+          aside={<AddPhotoButton onClick={addPhoto} />}
         >
           <Photos items={own} onAdd={addPhoto} emptyText="No photo is tied to this exact route yet." />
         </Block>
@@ -404,14 +429,14 @@ function VariantDetail({ v }: { v: Variant }) {
             {v.elevation && ` Elevation: ${v.elevation.source}.`}
           </p>
           <History contributions={contributions} created={{ by: v.createdBy.name, at: v.createdAt }} />
-          <SmallActions
+          {!SHARED_MODE && <SmallActions
             items={[
               [<Spline key="c" className="size-3.5" />, "Fix the route line", () => app.set({ contribute: { kind: "geometry_correction", variantId: v.id } })],
               [<PencilLine key="e" className="size-3.5" />, "Improve text", () => app.set({ contribute: { kind: "description_edit", variantId: v.id } })],
               [<MapPinPlus key="p" className="size-3.5" />, "Add a point", () => app.set({ contribute: { kind: "new_poi", targetId: v.id } })],
               [<Flag key="f" className="size-3.5" />, "Report a problem", () => app.set({ contribute: { kind: "report", subject: { type: "variant", id: v.id } } })],
             ]}
-          />
+          />}
         </Details>
       </div>
     </PanelShell>
@@ -485,7 +510,7 @@ function PoiDetail({ p }: { p: Poi }) {
             <ProvenanceBadge kind={p.provenance.kind} />
             <PublicationBadge status={p.publication} />
           </div>
-          <SmallActions items={[[<Flag key="f" className="size-3.5" />, "Report", () => app.set({ contribute: { kind: "report", subject: { type: "poi", id: p.id } } })]]} />
+          {!SHARED_MODE && <SmallActions items={[[<Flag key="f" className="size-3.5" />, "Report", () => app.set({ contribute: { kind: "report", subject: { type: "poi", id: p.id } } })]]} />}
         </Details>
       </div>
     </PanelShell>

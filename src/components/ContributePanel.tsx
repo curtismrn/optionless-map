@@ -33,14 +33,15 @@ import { bboxOf, formatKm, lineLength, simplify, type Coord } from "@/lib/geo";
 import { focusVariant, getMap } from "@/components/map/controller";
 import { PanelShell } from "@/components/PanelShell";
 import { AddMediaPanel } from "@/components/media/AddMediaPanel";
+import { EditLocationPanel, EditVariantPanel, HistoryPanel } from "@/components/edit/EditPanels";
 import { Badge, Button, cn, Field, inputCls, PublicationBadge } from "@/components/ui";
 import { COUNTRY_NAMES } from "@/data/seed";
 
-function closeContribute() {
+export function closeContribute() {
   app.set({ contribute: null, draw: EMPTY_DRAW });
 }
 
-function Header({ title, kicker }: { title: string; kicker: string }) {
+export function Header({ title, kicker }: { title: string; kicker: string }) {
   return (
     <div className="flex items-start justify-between border-b border-line px-3 py-2.5">
       <div>
@@ -84,6 +85,12 @@ export function ContributePanel() {
       return <ReportFlow key={intent.subject.id} subject={intent.subject} />;
     case "my_submissions":
       return <MySubmissions />;
+    case "edit_location":
+      return <EditLocationPanel key={intent.id ?? "new"} id={intent.id} />;
+    case "edit_variant":
+      return <EditVariantPanel key={intent.id ?? `new-${intent.locationId}`} id={intent.id} locationId={intent.locationId} />;
+    case "history":
+      return <HistoryPanel />;
   }
 }
 
@@ -91,7 +98,7 @@ export function ContributePanel() {
 // Drawing toolbar (shared)
 // ---------------------------------------------------------------------------
 
-function DrawTools({ allowGpx = true }: { allowGpx?: boolean }) {
+export function DrawTools({ allowGpx = true }: { allowGpx?: boolean }) {
   const draw = useApp((s) => s.draw);
   const fileRef = useRef<HTMLInputElement>(null);
   const [gpxMsg, setGpxMsg] = useState<{ ok: boolean; text: string } | null>(null);

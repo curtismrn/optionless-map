@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Plus, Search, X, UserRound, Inbox, Camera, Spline, ChevronDown } from "lucide-react";
 import { app, useApp } from "@/lib/store";
+import { SHARED_MODE } from "@/lib/supabase";
+import { AccountButton, EditMenu } from "@/components/edit/Account";
 import { STYLE_META, type StyleId } from "@/components/map/styles";
 import { cn } from "@/components/ui";
 
@@ -98,14 +100,23 @@ export function TopBar() {
       </div>
       <div className="flex-1" />
       <StyleSelector className="hidden xl:flex" />
-      <ContributeMenu pending={pending} />
-      <div
-        className="grid size-8 shrink-0 place-items-center border border-line text-fg-faint"
-        title="Browsing anonymously — accounts are planned (Supabase Auth)"
-        aria-label="Anonymous visitor"
-      >
-        <UserRound className="size-4" />
-      </div>
+      {SHARED_MODE ? (
+        <>
+          <EditMenu />
+          <AccountButton />
+        </>
+      ) : (
+        <>
+          <ContributeMenu pending={pending} />
+          <div
+            className="grid size-8 shrink-0 place-items-center border border-line text-fg-faint"
+            title="Local demo — set up Supabase to share the atlas with friends (see README)"
+            aria-label="Local demo"
+          >
+            <UserRound className="size-4" />
+          </div>
+        </>
+      )}
     </header>
   );
 }

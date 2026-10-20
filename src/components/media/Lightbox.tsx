@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { X, ChevronLeft, ChevronRight, Flag, ExternalLink, Trash2, MapPin } from "lucide-react";
-import { app, useApp, removeOwnMedia, openDetail } from "@/lib/store";
+import { useEffect, useRef, useState } from "react";
+import { X, ChevronLeft, ChevronRight, Flag, ExternalLink, Trash2, MapPin, Pencil, Loader2 } from "lucide-react";
+import { app, useApp, removeOwnMedia, openDetail, useCanEdit, runEdit } from "@/lib/store";
+import { SHARED_MODE } from "@/lib/supabase";
+import type { MediaItem } from "@/lib/domain/schema";
 import { focusLocation, focusVariant } from "@/components/map/controller";
 import { cn } from "@/components/ui";
 
@@ -127,7 +129,9 @@ export function Lightbox() {
               <MapPin className="size-3" /> Road
             </button>
           )}
-          {m.source === "local" ? (
+          {SHARED_MODE ? (
+            <MemberPhotoActions m={m} />
+          ) : m.source === "local" ? (
             <button
               onClick={() => window.confirm("Delete this photo/clip from this browser?") && void removeOwnMedia(m.id)}
               className="flex items-center gap-1 text-signal/80 hover:text-signal"
@@ -147,6 +151,87 @@ export function Lightbox() {
             </button>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/** Shared mode: any member can fix a caption, move a photo to another route of the road, or delete it. */
+function MemberPhotoActions({ m }: { m: MediaItem }) {
+  const can = useCanEdit();
+  const data = useApp((s) => s.data)!;
+  const [editing, setEditing] = useState(false);
+  const [f, setF] = useState({ caption: m.caption, credit: m.credit, attach: `${m.attachedTo.type}:${m.attachedTo.id}` });
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  useEffect(() => {
+    setEditing(false);
+    setErr("");
+    setF({ caption: m.caption, credit: m.credit, attach: `${m.attachedTo.type}:${m.attachedTo.id}` });
+  }, [m]);
+  if (!can) return null;
+
+  const locId = m.attachedTo.type === "location" ? m.attachedTo.id : data.variants.find((v) => v.id === m.attachedTo.id)?.locationId;
+  const loc = data.locations.find((l) => l.id === locId);
+  const targets = loc
+    ? [{ v: `location:${loc.id}`, l: `${loc.name} — whole road` }, ...data.variants.filter((v) => v.locationId === loc.id).map((v) => ({ v: `variant:${v.id}`, l: v.name }))]
+    : [{ v: f.attach, l: "Current place" }];
+
+  const save = async () => {
+    const [type, id] = f.attach.split(":") as ["location" | "variant" | "poi", string];
+    setBusy(true);
+    setErr("");
+    try {
+      await runEdit((e) => e.updatePhoto(m.id, { caption: f.caption, credit: f.credit, license: m.license, capturedAt: m.capturedAt ?? null, attachedTo: { type, id } }), "Photo saved.");
+      setEditing(false);
+    } catch (x) {
+      setErr(x instanceof Error ? x.message : "Saving failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const del = async () => {
+    if (!window.confirm("Remove this photo from the atlas for everyone? (You can undo it from History.)")) return;
+    setBusy(true);
+    try {
+      await removeOwnMedia(m.id);
+    } catch (x) {
+      setErr(x instanceof Error ? x.message : "Deleting failed");
+      setBusy(false);
+    }
+  };
+
+  if (!editing)
+    return (
+      <>
+        <button onClick={() => setEditing(true)} className="flex items-center gap-1 hover:text-fg">
+          <Pencil className="size-3" /> Edit
+        </button>
+        <button onClick={del} disabled={busy} className="flex items-center gap-1 text-signal/80 hover:text-signal">
+          {busy ? <Loader2 className="size-3 animate-spin" /> : <Trash2 className="size-3" />} Delete
+        </button>
+        {err && <span className="basis-full text-signal">{err}</span>}
+      </>
+    );
+  return (
+    <div className="basis-full space-y-2 pt-2 font-sans">
+      <textarea rows={2} maxLength={500} value={f.caption} onChange={(e) => setF({ ...f, caption: e.target.value })} placeholder="Caption" aria-label="Caption" className="w-full border border-line bg-ink px-2 py-1.5 text-[13px] text-fg" />
+      <div className="flex flex-wrap gap-2">
+        <input value={f.credit} maxLength={120} onChange={(e) => setF({ ...f, credit: e.target.value })} placeholder="Credit" aria-label="Credit" className="min-w-0 flex-1 border border-line bg-ink px-2 py-1.5 text-[13px] text-fg" />
+        <select value={f.attach} onChange={(e) => setF({ ...f, attach: e.target.value })} aria-label="Belongs to" className="min-w-0 flex-1 border border-line bg-ink px-2 py-1.5 text-[13px] text-fg">
+          {targets.map((t) => (
+            <option key={t.v} value={t.v}>
+              {t.l}
+            </option>
+          ))}
+        </select>
+      </div>
+      {err && <p className="text-[12px] text-signal">{err}</p>}
+      <div className="flex gap-2">
+        <button onClick={() => setEditing(false)} className="h-8 border border-line px-3 text-[12px] text-fg-dim hover:text-fg">Cancel</button>
+        <button onClick={save} disabled={busy} className="flex h-8 items-center gap-1 border border-ice bg-ice px-3 text-[12px] text-ink">
+          {busy && <Loader2 className="size-3 animate-spin" />} Save
+        </button>
       </div>
     </div>
   );

@@ -2,7 +2,9 @@
 
 import { useEffect } from "react";
 import dynamic from "next/dynamic";
-import { app, loadData, useApp } from "@/lib/store";
+import { app, loadData, useApp, startShared } from "@/lib/store";
+import { SHARED_MODE } from "@/lib/supabase";
+import { PrivateGate } from "@/components/edit/Account";
 import { TopBar } from "@/components/TopBar";
 import { ExplorePanel } from "@/components/ExplorePanel";
 import { DetailPanel } from "@/components/DetailPanel";
@@ -25,7 +27,8 @@ export function Atlas() {
   const rightOpen = useApp((s) => !!s.selection || !!s.contribute);
 
   useEffect(() => {
-    void loadData();
+    if (SHARED_MODE) startShared();
+    else void loadData();
     // Compact layout on phones: start with the explorer closed.
     if (window.innerWidth < 768) app.set({ exploreOpen: false });
     const onKey = (e: KeyboardEvent) => {
@@ -61,6 +64,7 @@ export function Atlas() {
       <RoutePicker />
       <Toast />
       <Lightbox />
+      <PrivateGate />
       <SnapEngine />
     </main>
   );
