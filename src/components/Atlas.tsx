@@ -7,7 +7,7 @@ import { TopBar } from "@/components/TopBar";
 import { ExplorePanel } from "@/components/ExplorePanel";
 import { DetailPanel } from "@/components/DetailPanel";
 import { ContributePanel } from "@/components/ContributePanel";
-import { StatusBar, MapControls, HoverCard, Toast, MapError } from "@/components/Chrome";
+import { StatusBar, MapControls, HoverCard, Toast, MapError, RoutePicker, SelectionChip } from "@/components/Chrome";
 import { Lightbox } from "@/components/media/Lightbox";
 import { SnapEngine } from "@/components/SnapEngine";
 
@@ -32,7 +32,8 @@ export function Atlas() {
       if (e.key !== "Escape" || (e.target as HTMLElement)?.closest("input,textarea,select")) return;
       const s = app.get();
       if (s.lightbox) return; // the viewer handles its own Escape
-      if (s.draw.active) app.set({ draw: { ...s.draw, active: false } });
+      if (s.pick) app.set({ pick: null });
+      else if (s.draw.active) app.set({ draw: { ...s.draw, active: false } });
       else if (s.selection) app.set({ selection: null });
     };
     window.addEventListener("keydown", onKey);
@@ -52,10 +53,12 @@ export function Atlas() {
           <ExplorePanel />
         </div>
         {contribute ? <ContributePanel /> : <DetailPanel />}
+        <SelectionChip />
         <MapControls />
         <StatusBar />
       </div>
       <HoverCard />
+      <RoutePicker />
       <Toast />
       <Lightbox />
       <SnapEngine />

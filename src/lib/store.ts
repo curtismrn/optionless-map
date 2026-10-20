@@ -55,6 +55,8 @@ export interface AppState {
   /** Mobile bottom-sheet height. */
   sheet: "peek" | "half" | "full";
   lightbox: { ids: string[]; index: number } | null;
+  /** Several overlapping routes under a tap — the user picks one. */
+  pick: { x: number; y: number; ids: string[] } | null;
   toast: string | null;
   mapError: string | null;
 }
@@ -112,6 +114,7 @@ export const app = createStore<AppState>({
   detailTab: "overview",
   sheet: "half",
   lightbox: null,
+  pick: null,
   toast: null,
   mapError: null,
 });
@@ -161,7 +164,7 @@ export async function removeOwnMedia(id: string) {
 
 /** Select a road record or variant and show its detail (mobile: half sheet). */
 export function openDetail(sel: NonNullable<Selection>, tab: DetailTab = "overview") {
-  app.set({ selection: sel, contribute: null, detailTab: tab, sheet: "half" });
+  app.set({ selection: sel, contribute: null, detailTab: tab, sheet: "half", pick: null });
 }
 
 export async function resetLocalContributions() {

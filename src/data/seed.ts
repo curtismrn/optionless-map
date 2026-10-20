@@ -9,9 +9,9 @@
 //   provenance "illustrative".
 // * No ratings, popularity, users, events, results or media are invented.
 
-import routesJson from "./generated/routes.json";
+import routesJson from "./generated/routes.json" with { type: "json" };
 import type { Location, Poi, Variant, Provenance, Actor, ElevationStats, LngLat } from "@/lib/domain/schema";
-import { sliceByDistance, lineLength, type Coord } from "@/lib/geo";
+import { sliceByDistance, lineLength, type Coord } from "../lib/geo.ts";
 
 type GeneratedRoute = {
   coordinates: Coord[];

@@ -22,7 +22,7 @@ function padding(): PaddingOptions {
   const w = typeof window === "undefined" ? 1440 : window.innerWidth;
   const h = typeof window === "undefined" ? 900 : window.innerHeight;
   const s = app.get();
-  if (w < 768) return { top: 80, left: 24, right: 24, bottom: Math.round(h * 0.5) };
+  if (w < 768) return { top: 112, left: 24, right: 56, bottom: Math.round(h * 0.6) }; // clear the bottom sheet, chip and controls
   const detailOpen = !!s.selection || !!s.contribute;
   return { top: 84, bottom: 56, left: s.exploreOpen ? 372 : 32, right: detailOpen ? 452 : 32 };
 }
@@ -45,7 +45,7 @@ export function focusVariant(id: string, cinematic = false) {
   const v = app.get().data?.variants.find((x) => x.id === id);
   if (!v) return;
   const coords = v.geometry.coordinates as Coord[];
-  if (!cinematic) return fit(coords, { pitch: 35 });
+  if (!cinematic) return fit(coords, { pitch: 15 });
   // Route camera: look along the route from its start, pitched over the terrain.
   const a = coords[0]!, b = coords.at(-1)!;
   const bearing = (Math.atan2(b[0] - a[0], b[1] - a[1]) * 180) / Math.PI;
@@ -76,4 +76,13 @@ export function zoomBy(delta: number) {
 
 export function resetNorth() {
   map?.easeTo({ bearing: 0, pitch: 0, duration: 600 });
+}
+
+let highlighted: string | null = null;
+/** Hover-highlight a route from a panel list (desktop affordance; tapping selects). */
+export function highlightRoute(id: string | null) {
+  if (!map || !map.getSource("om-variants")) return;
+  if (highlighted) map.setFeatureState({ source: "om-variants", id: highlighted }, { hover: false });
+  highlighted = id;
+  if (id) map.setFeatureState({ source: "om-variants", id }, { hover: true });
 }

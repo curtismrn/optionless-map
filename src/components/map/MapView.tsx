@@ -13,6 +13,7 @@ import {
 import "maplibre-gl/dist/maplibre-gl.css";
 import mlcontour from "maplibre-contour";
 import { app, view, openDetail, type AppState } from "@/lib/store";
+import { resolveRouteClick, selectionContext } from "@/lib/selection";
 import { bboxOf, type BBox, type Coord } from "@/lib/geo";
 import { buildVectorStyle, buildSatelliteStyle, buildClassicStyle, IS_LIGHT, TERRARIUM, type StyleId } from "./styles";
 import { addOverlay, buildCollections, buildDraft, setData, HIT_LAYERS, LOCATION_LAYERS, POI_LAYERS } from "./overlay";
@@ -88,8 +89,7 @@ export default function MapView() {
       setData(map, "om-hairpins", c.hairpins);
       setData(map, "om-selected", c.selected);
       setData(map, "om-endpoints", c.endpoints);
-      setData(map, "om-sel-labelpts", c.selectedLabels);
-      setData(map, "om-var-labelpts", c.variantLabels);
+      setData(map, "om-route-labels", c.labels);
       bboxes = new Map(c.variants.features.map((f) => [String(f.id), bboxOf(f.geometry.coordinates as Coord[])]));
       updateVisible();
     };
@@ -257,6 +257,7 @@ export default function MapView() {
       }
       const layers = [...POI_LAYERS, ...LOCATION_LAYERS, ...HIT_LAYERS].filter((l) => map.getLayer(l));
       const f = map.queryRenderedFeatures(e.point, { layers })[0];
+      if (s.pick) app.set({ pick: null });
       if (!f) {
         if (s.selection) app.set({ selection: null });
         return;
@@ -275,8 +276,18 @@ export default function MapView() {
         openDetail({ type: "location", id });
         focusLocation(id);
       } else {
-        openDetail({ type: "variant", id });
-        if (map.getZoom() < 10) focusVariant(id);
+        // Routes can share a stretch of road: look a few pixels around the tap and let the user choose.
+        const p = e.point;
+        const hits = map.queryRenderedFeatures([[p.x - 8, p.y - 8], [p.x + 8, p.y + 8]], { layers: HIT_LAYERS });
+        const d = s.data!;
+        const r = resolveRouteClick(hits.map((h) => String(h.properties.id)), d.variants, selectionContext(s.selection, d.variants, d.pois));
+        if (!r) return;
+        if ("choose" in r) {
+          app.set({ pick: { x: p.x, y: p.y, ids: r.choose } });
+          return;
+        }
+        openDetail({ type: "variant", id: r.select });
+        if (map.getZoom() < 10) focusVariant(r.select);
       }
     });
 

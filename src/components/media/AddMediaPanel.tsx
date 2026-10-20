@@ -1,9 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { X, Upload, ImagePlus, Film, Info } from "lucide-react";
+import { X, Upload, ImagePlus, Info } from "lucide-react";
 import { app, useApp, addMedia, openDetail, toast, type MediaTarget } from "@/lib/store";
-import { MAX_CLIP_SECONDS } from "@/lib/repository/localMedia";
 import type { MediaInput } from "@/lib/repository/types";
 import { PanelShell } from "@/components/PanelShell";
 import { Button, Field, inputCls, cn } from "@/components/ui";
@@ -49,21 +48,21 @@ export function AddMediaPanel({ target }: { target: MediaTarget }) {
   const pick = (f: File | undefined) => {
     setErr("");
     if (!f) return;
-    if (!f.type.startsWith("image/") && !f.type.startsWith("video/")) return setErr("Choose a photo or a video clip.");
+    if (!f.type.startsWith("image/")) return setErr("Choose a photo (video is not supported yet).");
     if (preview) URL.revokeObjectURL(preview);
     setFile(f);
     setPreview(URL.createObjectURL(f));
   };
 
   const submit = async () => {
-    if (!file) return setErr("Choose a photo or clip first.");
+    if (!file) return setErr("Choose a photo first.");
     if (!rights) return setErr("Please confirm you can share this file.");
     const [type, id] = attach.split(":") as [MediaTarget["type"], string];
     setBusy(true);
     setErr("");
     try {
       await addMedia({ attachedTo: { type, id }, file, caption, credit, license, capturedAt: capturedAt || undefined });
-      toast("Shared — visible on this road now (stored in this browser).");
+      toast("Photo added — visible in this browser only (not shared with others yet).");
       if (type !== "poi") openDetail({ type, id }, "media");
       else app.set({ contribute: null });
     } catch (e) {
@@ -76,10 +75,10 @@ export function AddMediaPanel({ target }: { target: MediaTarget }) {
   const isVideo = file?.type.startsWith("video/");
 
   return (
-    <PanelShell label="Add a photo or clip">
+    <PanelShell label="Add a photo">
       <div className="flex items-start justify-between border-b border-line px-3 py-2.5">
         <div className="min-w-0">
-          <div className="om-label text-ice">Add a photo or clip</div>
+          <div className="om-label text-ice">Add a photo</div>
           <h2 className="truncate font-display text-[22px] leading-tight font-semibold tracking-[0.03em] text-white">{loc?.name ?? "Point"}</h2>
         </div>
         <button onClick={() => app.set({ contribute: null })} className="p-1 text-fg-faint hover:text-fg" aria-label="Cancel">
@@ -118,18 +117,15 @@ export function AddMediaPanel({ target }: { target: MediaTarget }) {
             </div>
           ) : (
             <button onClick={() => fileRef.current?.click()} className="flex w-full flex-col items-center gap-2 px-4 py-8 text-center">
-              <span className="flex gap-2 text-fg-dim">
-                <ImagePlus className="size-6" />
-                <Film className="size-6" />
-              </span>
-              <span className="text-[13px] text-fg">Choose a photo or onboard clip</span>
-              <span className="text-[11px] text-fg-faint">or drop it here · clips up to {MAX_CLIP_SECONDS} s</span>
+              <ImagePlus className="size-6 text-fg-dim" />
+              <span className="text-[13px] text-fg">Choose a photo</span>
+              <span className="text-[11px] text-fg-faint">or drop it here · JPEG, PNG, WebP</span>
             </button>
           )}
           <input
             ref={fileRef}
             type="file"
-            accept="image/*,video/*"
+            accept="image/*"
             className="hidden"
             onChange={(e) => {
               pick(e.target.files?.[0]);
@@ -147,7 +143,7 @@ export function AddMediaPanel({ target }: { target: MediaTarget }) {
             ))}
           </select>
         </Field>
-        <Field label="Caption" hint="What, where, when — e.g. “Hairpin 7 at sunrise, uphill”">
+        <Field label="Caption" hint="e.g. “Hairpin 7 at sunrise, uphill”">
           <textarea rows={2} maxLength={500} className={inputCls} value={caption} onChange={(e) => setCaption(e.target.value)} />
         </Field>
         <div className="grid grid-cols-2 gap-2">
@@ -167,14 +163,11 @@ export function AddMediaPanel({ target }: { target: MediaTarget }) {
         </Field>
         <label className="flex items-start gap-2 text-[12px] text-fg-dim">
           <input type="checkbox" checked={rights} onChange={(e) => setRights(e.target.checked)} className="mt-0.5 accent-[#8fd6ea]" />
-          <span>I shot this or have the right to share it, and it doesn&apos;t show illegal driving on open roads.</span>
+          <span>I took this photo or have the right to share it.</span>
         </label>
         <p className="flex gap-1.5 text-[11px] leading-snug text-fg-faint">
           <Info className="mt-0.5 size-3 shrink-0" />
-          {isVideo
-            ? "Video files keep their embedded metadata (which may include location). Blur number plates and faces before sharing."
-            : "Photos are re-encoded on your device, which removes EXIF metadata including GPS position."}{" "}
-          Prototype: files stay in this browser only.
+Photos are re-encoded on your device (removes EXIF and GPS data). They are stored in this browser only — your friends won&apos;t see them until a shared backend exists.
         </p>
         {err && <p className="text-[11.5px] text-signal">{err}</p>}
       </div>
@@ -185,7 +178,7 @@ export function AddMediaPanel({ target }: { target: MediaTarget }) {
         </Button>
         <div className="flex-1" />
         <Button variant="solid" disabled={busy || !file} onClick={submit}>
-          <Upload className="size-3.5" /> {busy ? "Processing…" : "Share"}
+          <Upload className="size-3.5" /> {busy ? "Processing…" : "Add photo"}
         </Button>
       </div>
     </PanelShell>

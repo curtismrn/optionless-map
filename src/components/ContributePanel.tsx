@@ -774,16 +774,15 @@ function MySubmissions() {
         <ShieldAlert className="mt-0.5 size-3.5 shrink-0 text-amber" />
         <span>
           Road suggestions, fixes and reports wait for <span className="text-amber">review</span> and stay out of the main atlas until approved.
-          Reviewing needs accounts and moderators, which this prototype doesn&apos;t have yet — so these statuses won&apos;t change. Photos and
-          clips publish straight away.
+          Reviewing needs accounts and moderators, which this prototype doesn&apos;t have yet — so these statuses won&apos;t change. Photos appear straight away — in this browser only.
         </span>
       </div>
       <div className="om-scroll min-h-0 flex-1 overflow-y-auto">
         <div className="px-3 pt-3 pb-1">
-          <span className="om-label">Photos & clips · {myMedia.length}</span>
+          <span className="om-label">Photos · {myMedia.length}</span>
         </div>
         {myMedia.length === 0 ? (
-          <p className="px-3 pb-3 text-[12px] text-fg-faint">Open any road and use “Add photo or clip”.</p>
+          <p className="px-3 pb-3 text-[12px] text-fg-faint">Open any road and use “Add photo”.</p>
         ) : (
           <div className="grid grid-cols-4 gap-1 px-3 pb-3">
             {myMedia.map((m, i) => (

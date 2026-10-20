@@ -1,6 +1,6 @@
 "use client";
 
-import { Play, Camera, Plus, Flag } from "lucide-react";
+import { Play, Camera, Flag } from "lucide-react";
 import type { MediaItem } from "@/lib/domain/schema";
 import { app } from "@/lib/store";
 import { cn } from "@/components/ui";
@@ -14,7 +14,7 @@ function Thumb({ m, onClick, className, label }: { m: MediaItem; onClick: () => 
     <button
       onClick={onClick}
       className={cn("group relative overflow-hidden bg-panel-3 text-left", className)}
-      aria-label={`${m.kind === "clip" ? "Play clip" : "View photo"}: ${m.caption || m.title}`}
+      aria-label={`View photo: ${m.caption || m.title}`}
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
@@ -43,35 +43,6 @@ function Thumb({ m, onClick, className, label }: { m: MediaItem; onClick: () => 
   );
 }
 
-/** Horizontal strip for the overview; last tile opens the full gallery or invites a first contribution. */
-export function MediaStrip({ items, onSeeAll, onAdd }: { items: MediaItem[]; onSeeAll: () => void; onAdd: () => void }) {
-  if (items.length === 0) return <EmptyMedia onAdd={onAdd} />;
-  const shown = items.slice(0, 6);
-  return (
-    <div className="-mx-3 flex snap-x gap-1.5 overflow-x-auto px-3 pb-1 [scrollbar-width:none]">
-      {shown.map((m, i) => (
-        <Thumb key={m.id} m={m} onClick={() => openLightbox(items, i)} className="aspect-[4/3] w-[148px] shrink-0 snap-start" />
-      ))}
-      <button
-        onClick={items.length > shown.length ? onSeeAll : onAdd}
-        className="flex aspect-[4/3] w-[110px] shrink-0 snap-start flex-col items-center justify-center gap-1 border border-dashed border-line-strong text-fg-dim hover:border-ice/60 hover:text-ice"
-      >
-        {items.length > shown.length ? (
-          <>
-            <span className="font-display text-2xl font-semibold">+{items.length - shown.length}</span>
-            <span className="font-mono text-[9px] tracking-[0.12em]">SEE ALL</span>
-          </>
-        ) : (
-          <>
-            <Plus className="size-4" />
-            <span className="font-mono text-[9px] tracking-[0.12em]">ADD YOURS</span>
-          </>
-        )}
-      </button>
-    </div>
-  );
-}
-
 export function MediaGrid({ items, labelFor }: { items: MediaItem[]; labelFor?: (m: MediaItem) => string | undefined }) {
   return (
     <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
@@ -88,7 +59,7 @@ export function MediaGrid({ items, labelFor }: { items: MediaItem[]; labelFor?: 
   );
 }
 
-export function EmptyMedia({ onAdd }: { onAdd: () => void }) {
+export function EmptyMedia({ onAdd, text }: { onAdd: () => void; text?: string }) {
   return (
     <button
       onClick={onAdd}
@@ -98,8 +69,8 @@ export function EmptyMedia({ onAdd }: { onAdd: () => void }) {
         <Camera className="size-4" />
       </span>
       <span>
-        <span className="block text-[13px] text-fg">No photos or clips yet</span>
-        <span className="block text-[11.5px] text-fg-faint">Know this road? Share the first shot or onboard clip.</span>
+        <span className="block text-[13px] text-fg">{text ?? "No photos yet"}</span>
+        <span className="block text-[11.5px] text-fg-faint">Been there? Add the first photo.</span>
       </span>
     </button>
   );

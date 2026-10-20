@@ -7,6 +7,7 @@
 // server-side validation, rate limiting, spam prevention and moderation.
 
 import mediaJson from "@/data/generated/media.json";
+import { VIDEO_ENABLED } from "@/lib/media";
 import { listLocalMedia, putLocalMedia, deleteLocalMedia, clearLocalMedia, processFile } from "./localMedia";
 import {
   Contribution,
@@ -157,7 +158,9 @@ export class LocalDemoRepository implements AtlasRepository {
     this.contributions = readStored();
     const reported = new Set(this.contributions.filter((c) => c.kind === "report" && c.report?.subject.type === "media").map((c) => c.report!.subject.id));
     const local = await listLocalMedia();
-    const media = [...local.slice().reverse(), ...SEED_MEDIA].map((m) => (reported.has(m.id) ? { ...m, status: "reported" as const } : m));
+    const media = [...local.slice().reverse(), ...SEED_MEDIA]
+      .filter((m) => VIDEO_ENABLED || m.kind === "photo") // clips stay in the data, hidden from the product for now
+      .map((m) => (reported.has(m.id) ? { ...m, status: "reported" as const } : m));
     return { ...applyContributions(this.contributions), media, contributions: this.contributions };
   }
 

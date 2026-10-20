@@ -153,7 +153,7 @@ function ContributeMenu({ pending }: { pending: number }) {
           >
             <Camera className="mt-0.5 size-4 text-ice" />
             <span>
-              <span className="block text-[13px] text-fg">Add a photo or clip</span>
+              <span className="block text-[13px] text-fg">Add a photo</span>
               <span className="block text-[11px] text-fg-faint">{target ? "To the road you have open" : "Open a road first, then share"}</span>
             </span>
           </button>
@@ -169,7 +169,7 @@ function ContributeMenu({ pending }: { pending: number }) {
             <Inbox className="mt-0.5 size-4 text-fg-dim" />
             <span className="flex-1">
               <span className="block text-[13px] text-fg">My submissions</span>
-              <span className="block text-[11px] text-fg-faint">Status of your suggestions, reports and media</span>
+              <span className="block text-[11px] text-fg-faint">Stored in this browser only</span>
             </span>
             {pending > 0 && <span className="font-mono text-[10px] text-amber">{pending} pending</span>}
           </button>

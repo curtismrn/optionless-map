@@ -1,24 +1,28 @@
 // Route overlay: sources, layers and GeoJSON builders.
 //
+// Visual hierarchy (see lib/selection.ts for roles):
+//   nothing selected   → calm cyan lines, location pins + names, no route labels until z13
+//   location selected  → its routes full cyan, everything else faded, pins of other places dimmed
+//   variant selected   → the route drawn white with endpoints and its name; siblings cyan; rest faded
+//
 // Zoom bands
-//   0–6   density heatmap + clustered location pins (regional indicators)
-//   4–12  location pins with variant counts
-//   5.5+  variant geometry (lines fade in), hover & selection
-//   11+   route labels, POIs, detected hairpins, direction chevrons
+//   0–7    density glow + clustered location pins
+//   5+     route lines fade in
+//   ≤12.5  location pins and names (amber = featured)
+//   12+    points of interest; 13+ secondary route labels and one-way chevrons
 
 import type { Map as MLMap, ExpressionSpecification, GeoJSONSource, LayerSpecification } from "maplibre-gl";
 import type { Feature, FeatureCollection, LineString, Point } from "geojson";
-import { MOTORSPORT_ACTIVITIES, ACTIVITY_CODE, type Location, type Poi, type Variant } from "@/lib/domain/schema";
+import type { Poi, Variant } from "@/lib/domain/schema";
 import { samplePoints, sliceByDistance, lineLength, type Coord } from "@/lib/geo";
 import { variantPasses, locationPasses, mediaIndex, type Filters } from "@/lib/search";
+import { selectionContext, routeRole } from "@/lib/selection";
 import type { AppState } from "@/lib/store";
 
 export const C = {
   ice: "#8fd6ea",
   amber: "#e6a43c",
-  signal: "#e0664c",
   white: "#f4f6f7",
-  community: "#b8a6f2",
   ink: "#0b0e11",
 };
 
@@ -32,76 +36,48 @@ type Data = NonNullable<AppState["data"]>;
 
 const fc = <G extends LineString | Point>(features: Feature<G>[]): FeatureCollection<G> => ({ type: "FeatureCollection", features });
 
-/** Variant code within its location: V1, V2 … by declaration order. */
-export function variantCodes(variants: Variant[]): Map<string, string> {
-  const counters = new Map<string, number>();
-  const out = new Map<string, string>();
-  for (const v of variants) {
-    const n = (counters.get(v.locationId) ?? 0) + 1;
-    counters.set(v.locationId, n);
-    out.set(v.id, `V${n}`);
-  }
-  return out;
+/** Mountain roads are too tortuous for line-placed text, so labels sit on each route's midpoint. */
+function midpoint(coords: Coord[]): Coord {
+  return sliceByDistance(coords, 0, lineLength(coords) / 2).at(-1) ?? coords[0]!;
 }
 
 export function buildCollections(data: Data, filters: Filters, selection: AppState["selection"]) {
   const locById = new Map(data.locations.map((l) => [l.id, l]));
-  const codes = variantCodes(data.variants);
   const withMedia = mediaIndex(data.media);
-  const visibleVariants = data.variants.filter((v) => variantPasses(v, locById.get(v.locationId), filters, withMedia));
-  const mediaCount = new Map<string, number>();
-  const variantLoc = new Map(data.variants.map((v) => [v.id, v.locationId]));
-  for (const m of data.media) {
-    if (m.status === "removed") continue;
-    const locId = m.attachedTo.type === "location" ? m.attachedTo.id : variantLoc.get(m.attachedTo.id);
-    if (locId) mediaCount.set(locId, (mediaCount.get(locId) ?? 0) + 1);
-  }
+  const ctx = selectionContext(selection, data.variants, data.pois);
 
-  const variantProps = (v: Variant) => {
-    const loc = locById.get(v.locationId);
-    return {
+  // The selected route is always drawn, even if a filter or its pending status would hide it.
+  const visibleVariants = data.variants.filter((v) => v.id === ctx.variantId || variantPasses(v, locById.get(v.locationId), filters, withMedia));
+
+  const variantFeature = (v: Variant): Feature<LineString> => ({
+    type: "Feature",
+    id: v.id,
+    properties: {
       id: v.id,
       locationId: v.locationId,
       name: v.name,
-      code: codes.get(v.id) ?? "",
-      activityCode: ACTIVITY_CODE[v.activity],
-      motorsport: MOTORSPORT_ACTIVITIES.includes(v.activity),
+      role: routeRole(v, ctx),
       dashed: v.publication !== "published" || v.provenance.kind === "illustrative",
-      community: v.provenance.kind === "community",
       oneWay: v.direction !== "both",
-      featured: !!loc?.featured,
-    };
-  };
-
-  const primaryIds = new Set(
-    selection?.type === "variant"
-      ? [selection.id]
-      : selection?.type === "location"
-        ? data.variants.filter((v) => v.locationId === selection.id).map((v) => v.id)
-        : [],
-  );
-  const variants = fc<LineString>(
-    visibleVariants.map((v) => ({
-      type: "Feature",
-      id: v.id,
-      properties: { ...variantProps(v), labelled: primaryIds.has(v.id) },
-      geometry: { type: "LineString", coordinates: v.geometry.coordinates },
-    })),
-  );
+    },
+    geometry: { type: "LineString", coordinates: v.geometry.coordinates },
+  });
+  const variants = fc<LineString>(visibleVariants.map(variantFeature));
 
   const locations = fc<Point>(
     data.locations
-      .filter((l) => locationPasses(l, data.variants, filters, withMedia))
+      .filter((l) => l.id === ctx.locationId || locationPasses(l, data.variants, filters, withMedia))
       .map((l) => ({
         type: "Feature",
         id: l.id,
         properties: {
           id: l.id,
-          name: l.name.toUpperCase(),
-          count: visibleVariants.filter((v) => v.locationId === l.id).length,
-          media: mediaCount.get(l.id) ?? 0,
+          name: l.name,
           featured: l.featured,
-          pending: l.publication !== "published",
+          active: l.id === ctx.locationId,
+          dimmed: !!ctx.locationId && l.id !== ctx.locationId,
+          // featured first, then alphabetical — drives label collision priority
+          sort: l.id === ctx.locationId ? 0 : l.featured ? 1 : 2,
         },
         geometry: { type: "Point", coordinates: l.center },
       })),
@@ -118,21 +94,26 @@ export function buildCollections(data: Data, filters: Filters, selection: AppSta
   );
 
   const visibleIds = new Set(visibleVariants.map((v) => v.id));
+  const variantLoc = new Map(data.variants.map((v) => [v.id, v.locationId]));
   const pois = fc<Point>(
     data.pois
       .filter((p) => p.publication !== "rejected")
       .filter((p) => (p.parent.type === "variant" ? visibleIds.has(p.parent.id) : true))
-      .map((p: Poi) => ({
-        type: "Feature",
-        id: p.id,
-        properties: {
+      .map((p: Poi) => {
+        const locId = p.parent.type === "location" ? p.parent.id : variantLoc.get(p.parent.id);
+        return {
+          type: "Feature",
           id: p.id,
-          name: p.communityLabel ? `“${p.name}”` : p.name,
-          community: p.communityLabel || p.provenance.kind === "community",
-          pending: p.publication !== "published",
-        },
-        geometry: { type: "Point", coordinates: p.coordinates },
-      })),
+          properties: {
+            id: p.id,
+            name: p.communityLabel ? `“${p.name}”` : p.name,
+            community: p.communityLabel || p.provenance.kind === "community",
+            pending: p.publication !== "published",
+            active: !!ctx.locationId && locId === ctx.locationId,
+          },
+          geometry: { type: "Point", coordinates: p.coordinates },
+        };
+      }),
   );
 
   const hairpins = fc<Point>(
@@ -145,54 +126,26 @@ export function buildCollections(data: Data, filters: Filters, selection: AppSta
     ),
   );
 
-  // Selection: a variant (primary) plus its siblings, or all variants of a location.
-  let selLocationId: string | null = null;
-  let selVariantId: string | null = null;
-  if (selection?.type === "variant") {
-    selVariantId = selection.id;
-    selLocationId = data.variants.find((v) => v.id === selection.id)?.locationId ?? null;
-  } else if (selection?.type === "location") selLocationId = selection.id;
-  else if (selection?.type === "poi") {
-    const p = data.pois.find((x) => x.id === selection.id);
-    if (p?.parent.type === "variant") selVariantId = p.parent.id;
-    selLocationId = p?.parent.type === "location" ? p.parent.id : data.variants.find((v) => v.id === selVariantId)?.locationId ?? null;
-  }
-  // Unapproved suggestions stay out of the atlas unless explicitly opened or opted into.
-  const selectedSet = data.variants.filter(
-    (v) => v.locationId === selLocationId && (v.publication === "published" || v.id === selVariantId || (filters.includePending && v.publication === "pending_review")),
-  );
-  const selected = fc<LineString>(
-    selectedSet.map((v) => ({
-      type: "Feature",
-      id: v.id,
-      properties: { ...variantProps(v), primary: selVariantId ? v.id === selVariantId : true, group: !selVariantId },
-      geometry: { type: "LineString", coordinates: v.geometry.coordinates },
-    })),
-  );
-  const primary = selVariantId ? data.variants.find((v) => v.id === selVariantId) : undefined;
+  const primary = ctx.variantId ? data.variants.find((v) => v.id === ctx.variantId) : undefined;
+  const selected = fc<LineString>(primary ? [variantFeature(primary)] : []);
   const endpoints = fc<Point>(
     primary
       ? [
-          { type: "Feature", properties: { kind: "start", label: "START" }, geometry: { type: "Point", coordinates: primary.geometry.coordinates[0]! } },
-          { type: "Feature", properties: { kind: "end", label: "FINISH" }, geometry: { type: "Point", coordinates: primary.geometry.coordinates.at(-1)! } },
+          { type: "Feature", properties: { kind: "start", label: "Start" }, geometry: { type: "Point", coordinates: primary.geometry.coordinates[0]! } },
+          { type: "Feature", properties: { kind: "end", label: "Finish" }, geometry: { type: "Point", coordinates: primary.geometry.coordinates.at(-1)! } },
         ]
       : [],
   );
 
-  // Mountain roads are too tortuous for line-placed text, so labels sit on each route midpoint.
-  const midpoint = (coords: Coord[]): Coord => {
-    const half = lineLength(coords) / 2;
-    return sliceByDistance(coords, 0, half).at(-1) ?? coords[0]!;
-  };
-  const labelPoint = (f: Feature<LineString>): Feature<Point> => ({
-    type: "Feature",
-    properties: f.properties,
-    geometry: { type: "Point", coordinates: midpoint(f.geometry.coordinates as Coord[]) },
-  });
-  const variantLabels = fc<Point>(variants.features.map(labelPoint));
-  const selectedLabels = fc<Point>(selected.features.map(labelPoint));
+  const labels = fc<Point>(
+    variants.features.map((f) => ({
+      type: "Feature",
+      properties: f.properties,
+      geometry: { type: "Point", coordinates: midpoint(f.geometry.coordinates as Coord[]) },
+    })),
+  );
 
-  return { variants, locations, density, pois, hairpins, selected, endpoints, variantLabels, selectedLabels, visibleCount: visibleVariants.length };
+  return { variants, locations, density, pois, hairpins, selected, endpoints, labels, visibleCount: visibleVariants.length };
 }
 
 export function buildDraft(draw: AppState["draw"]) {
@@ -235,7 +188,7 @@ function chevronImage(): ImageData {
   return ctx.getImageData(0, 0, s, s);
 }
 
-const WIDTH_STOPS = [5, 1, 9, 2, 13, 3.4, 17, 7] as const;
+const WIDTH_STOPS = [5, 0.8, 9, 1.6, 13, 3, 17, 6] as const;
 
 /** Zoom-interpolated width; `at` turns each stop base width into a (possibly data-driven) value. */
 const zoomWidth = (at: (base: number) => number | ExpressionSpecification): ExpressionSpecification => {
@@ -243,7 +196,14 @@ const zoomWidth = (at: (base: number) => number | ExpressionSpecification): Expr
   for (let i = 0; i < WIDTH_STOPS.length; i += 2) stops.push(WIDTH_STOPS[i]!, at(WIDTH_STOPS[i + 1]!));
   return ["interpolate", ["exponential", 1.4], ["zoom"], ...stops] as unknown as ExpressionSpecification;
 };
-const lineWidth = (k = 1) => zoomWidth((b) => b * k);
+
+const role = (none: number, sibling: number, faded: number, primary = sibling): ExpressionSpecification => [
+  "match", ["get", "role"], "none", none, "sibling", sibling, "faded", faded, "primary", primary, none,
+];
+const hovering: ExpressionSpecification = ["boolean", ["feature-state", "hover"], false];
+
+/** Fade lines in from z5 to z7 while respecting their role opacity. */
+const fadeIn = (o: ExpressionSpecification): ExpressionSpecification => ["interpolate", ["linear"], ["zoom"], 5, 0, 7, o];
 
 export function addOverlay(map: MLMap, light: boolean) {
   const empty = fc([]);
@@ -262,22 +222,18 @@ export function addOverlay(map: MLMap, light: boolean) {
   add("om-draft-vertices", { promoteId: "i" });
   add("om-draft-reference");
   add("om-profile-cursor");
-  add("om-sel-labelpts");
-  add("om-var-labelpts");
+  add("om-route-labels");
 
   if (!map.hasImage("om-chevron")) map.addImage("om-chevron", chevronImage(), { sdf: true });
 
-  // Insert route lines beneath the basemap's first label layer so place names stay legible.
+  // Route lines go beneath the basemap's first label layer so place names stay legible.
   const firstSymbol = map.getStyle().layers.find((l) => l.type === "symbol" && !l.id.startsWith("om-"))?.id;
   const casing = light ? "#ffffff" : C.ink;
-  const routeColor: ExpressionSpecification = [
-    "case",
-    ["boolean", ["get", "community"], false], C.community,
-    ["boolean", ["get", "motorsport"], false], C.signal,
-    light ? "#0f7f9c" : C.ice,
-  ];
-  const hovering: ExpressionSpecification = ["boolean", ["feature-state", "hover"], false];
-  const hoverWidth = (k: number, add = 0) => zoomWidth((b) => ["case", hovering, b * k * 1.6 + add, b * k + add]);
+  const cyan = light ? "#0f7f9c" : C.ice;
+  const lineColor: ExpressionSpecification = ["case", hovering, light ? "#004e63" : "#d6f3fb", cyan];
+  // primary is drawn by the om-sel-* layers; the base line underneath stays out of the way
+  const lineOpacity = fadeIn(["case", hovering, 1, role(0.7, 1, 0.22, 0)]);
+  const lineWidth = zoomWidth((b) => ["case", hovering, b * 1.8, role(b, b * 1.25, b * 0.8)] as ExpressionSpecification);
 
   const below: LayerSpecification[] = [
     {
@@ -291,9 +247,9 @@ export function addOverlay(map: MLMap, light: boolean) {
         "heatmap-color": [
           "interpolate", ["linear"], ["heatmap-density"],
           0, "rgba(143,214,234,0)",
-          0.2, "rgba(143,214,234,0.12)",
-          0.6, "rgba(143,214,234,0.28)",
-          1, "rgba(230,164,60,0.45)",
+          0.2, "rgba(143,214,234,0.10)",
+          0.6, "rgba(143,214,234,0.22)",
+          1, "rgba(230,164,60,0.38)",
         ],
         "heatmap-opacity": ["interpolate", ["linear"], ["zoom"], 5, 1, 8, 0],
       },
@@ -306,8 +262,8 @@ export function addOverlay(map: MLMap, light: boolean) {
       layout: { "line-cap": "round", "line-join": "round" },
       paint: {
         "line-color": casing,
-        "line-width": hoverWidth(1, 2.5),
-        "line-opacity": ["interpolate", ["linear"], ["zoom"], 5, 0, 6.5, 0.85],
+        "line-width": zoomWidth((b) => role(b + 2, b * 1.25 + 2.5, b + 1)),
+        "line-opacity": fadeIn(role(0.6, 0.85, 0.25, 0)),
       },
     },
     {
@@ -317,11 +273,7 @@ export function addOverlay(map: MLMap, light: boolean) {
       minzoom: 5,
       filter: ["!", ["get", "dashed"]],
       layout: { "line-cap": "round", "line-join": "round" },
-      paint: {
-        "line-color": ["case", ["boolean", ["feature-state", "hover"], false], light ? "#004e63" : "#d6f3fb", routeColor],
-        "line-width": hoverWidth(1),
-        "line-opacity": ["interpolate", ["linear"], ["zoom"], 5, 0, 6.5, 0.95],
-      },
+      paint: { "line-color": lineColor, "line-width": lineWidth, "line-opacity": lineOpacity },
     },
     {
       id: "om-var-dashed",
@@ -330,39 +282,29 @@ export function addOverlay(map: MLMap, light: boolean) {
       minzoom: 5,
       filter: ["get", "dashed"],
       layout: { "line-join": "round" },
-      paint: {
-        "line-color": ["case", ["boolean", ["feature-state", "hover"], false], light ? "#004e63" : "#d6f3fb", routeColor],
-        "line-width": hoverWidth(1),
-        "line-dasharray": [1.6, 1.4],
-        "line-opacity": ["interpolate", ["linear"], ["zoom"], 5, 0, 6.5, 0.95],
-      },
+      paint: { "line-color": lineColor, "line-width": lineWidth, "line-dasharray": [1.6, 1.4], "line-opacity": lineOpacity },
     },
-    // selection: group (location) and primary (variant)
+    // the selected route: glow, casing, white line
     {
       id: "om-sel-glow",
       type: "line",
       source: "om-selected",
-      filter: ["get", "primary"],
       layout: { "line-cap": "round", "line-join": "round" },
-      paint: { "line-color": light ? "#0f7f9c" : C.ice, "line-width": lineWidth(4.2), "line-blur": 6, "line-opacity": 0.35 },
+      paint: { "line-color": cyan, "line-width": zoomWidth((b) => b * 4.5), "line-blur": 6, "line-opacity": 0.35 },
     },
     {
       id: "om-sel-casing",
       type: "line",
       source: "om-selected",
       layout: { "line-cap": "round", "line-join": "round" },
-      paint: { "line-color": casing, "line-width": zoomWidth((b) => b * 1.5 + 3), "line-opacity": ["case", ["get", "primary"], 1, 0.6] },
+      paint: { "line-color": casing, "line-width": zoomWidth((b) => b * 1.7 + 3) },
     },
     {
       id: "om-sel-line",
       type: "line",
       source: "om-selected",
       layout: { "line-cap": "round", "line-join": "round" },
-      paint: {
-        "line-color": ["case", ["get", "primary"], light ? "#111" : C.white, routeColor],
-        "line-width": zoomWidth((b) => ["case", ["get", "primary"], b * 1.5, b * 1.1]),
-        "line-opacity": ["case", ["get", "primary"], 1, ["get", "group"], 0.95, 0.55],
-      },
+      paint: { "line-color": light ? "#111" : C.white, "line-width": zoomWidth((b) => b * 1.7) },
     },
   ];
   for (const l of below) if (!map.getLayer(l.id)) map.addLayer(l, firstSymbol);
@@ -373,19 +315,18 @@ export function addOverlay(map: MLMap, light: boolean) {
       type: "line",
       source: "om-variants",
       minzoom: 5.5,
-      paint: { "line-color": "#000", "line-width": 16, "line-opacity": 0.001 },
+      paint: { "line-color": "#000", "line-width": 18, "line-opacity": 0.001 },
     },
     {
       id: "om-sel-arrows",
       type: "symbol",
       source: "om-selected",
-      filter: ["any", ["get", "primary"], ["get", "oneWay"]],
-      minzoom: 9,
+      minzoom: 10,
       layout: {
         "symbol-placement": "line",
-        "symbol-spacing": ["interpolate", ["linear"], ["zoom"], 9, 60, 15, 110],
+        "symbol-spacing": ["interpolate", ["linear"], ["zoom"], 10, 70, 15, 120],
         "icon-image": "om-chevron",
-        "icon-size": ["interpolate", ["linear"], ["zoom"], 9, 0.35, 15, 0.6],
+        "icon-size": ["interpolate", ["linear"], ["zoom"], 10, 0.35, 15, 0.6],
         "icon-rotation-alignment": "map",
         "icon-allow-overlap": true,
         "icon-ignore-placement": true,
@@ -396,69 +337,82 @@ export function addOverlay(map: MLMap, light: boolean) {
       id: "om-var-arrows",
       type: "symbol",
       source: "om-variants",
-      filter: ["get", "oneWay"],
-      minzoom: 11,
+      filter: ["all", ["get", "oneWay"], ["match", ["get", "role"], ["none", "sibling"], true, false]],
+      minzoom: 13,
       layout: {
         "symbol-placement": "line",
-        "symbol-spacing": 90,
+        "symbol-spacing": 110,
         "icon-image": "om-chevron",
         "icon-size": 0.4,
         "icon-rotation-alignment": "map",
         "icon-allow-overlap": true,
       },
-      paint: { "icon-color": light ? "#0f7f9c" : C.ice, "icon-opacity": 0.8 },
+      paint: { "icon-color": cyan, "icon-opacity": 0.7 },
     },
     {
-      id: "om-sel-labels",
-      type: "symbol",
-      source: "om-sel-labelpts",
-      filter: ["get", "primary"],
-      minzoom: 8,
-      layout: {
-        "text-field": ["concat", ["get", "code"], " · ", ["upcase", ["get", "name"]]],
-        "text-font": FONT_BOLD,
-        "text-size": 10.5,
-        "text-letter-spacing": 0.08,
-        "text-max-width": 14,
-        "text-variable-anchor": ["left", "right", "top", "bottom"],
-        "text-radial-offset": 0.9,
-        "text-justify": "auto",
-      },
+      id: "om-poi",
+      type: "circle",
+      source: "om-pois",
+      minzoom: 12,
       paint: {
-        "text-color": light ? "#111" : C.white,
-        "text-halo-color": casing,
-        "text-halo-width": 1.6,
-        "text-opacity": ["case", ["get", "primary"], 1, 0.75],
+        "circle-radius": ["case", hovering, 6, 4],
+        "circle-color": ["case", ["get", "community"], C.white, C.amber],
+        "circle-stroke-color": casing,
+        "circle-stroke-width": 1.5,
+        "circle-opacity": ["case", ["get", "pending"], 0.6, 0.95],
       },
     },
     {
-      id: "om-var-labels",
+      id: "om-poi-labels",
       type: "symbol",
-      source: "om-var-labelpts",
-      filter: ["!", ["get", "labelled"]],
-      minzoom: 10.5,
+      source: "om-pois",
+      minzoom: 13,
+      filter: ["any", ["get", "active"], [">=", ["zoom"], 14.5]],
       layout: {
-        "text-field": ["upcase", ["get", "name"]],
-        "text-font": FONT,
-        "text-size": 10,
-        "text-letter-spacing": 0.06,
-        "text-max-width": 14,
-        "text-variable-anchor": ["left", "right", "top", "bottom"],
-        "text-radial-offset": 0.8,
+        "text-field": ["get", "name"],
+        "text-font": ["case", ["get", "community"], ["literal", ["Noto Sans Italic"]], ["literal", FONT]],
+        "text-size": 11,
+        "text-offset": [0.9, 0],
+        "text-anchor": "left",
+        "text-optional": true,
+        "symbol-sort-key": 30,
       },
-      paint: { "text-color": light ? "#0f5d72" : C.ice, "text-halo-color": casing, "text-halo-width": 1.5 },
+      paint: { "text-color": light ? "#7a4d00" : "#e8c48a", "text-halo-color": casing, "text-halo-width": 1.4 },
     },
     {
       id: "om-hairpins",
       type: "circle",
       source: "om-hairpins",
-      minzoom: 12,
+      minzoom: 13,
+      paint: { "circle-radius": 3, "circle-color": casing, "circle-stroke-color": cyan, "circle-stroke-width": 1.2 },
+    },
+    // Route names: the selected route always; other routes only when zoomed in close.
+    {
+      id: "om-route-labels",
+      type: "symbol",
+      source: "om-route-labels",
+      filter: [
+        "case",
+        ["==", ["get", "role"], "primary"], [">=", ["zoom"], 7],
+        ["==", ["get", "role"], "faded"], false,
+        [">=", ["zoom"], 13],
+      ],
+      layout: {
+        "text-field": ["get", "name"],
+        "text-font": ["case", ["==", ["get", "role"], "primary"], ["literal", FONT_BOLD], ["literal", FONT]],
+        "text-size": ["case", ["==", ["get", "role"], "primary"], 13, 11],
+        "text-max-width": 12,
+        "text-variable-anchor": ["left", "right", "top", "bottom"],
+        "text-radial-offset": 1,
+        "text-justify": "auto",
+        "text-padding": 6,
+        "symbol-sort-key": ["case", ["==", ["get", "role"], "primary"], 0, 20],
+      },
       paint: {
-        "circle-radius": 3,
-        "circle-color": casing,
-        "circle-stroke-color": light ? "#0f7f9c" : C.ice,
-        "circle-stroke-width": 1.2,
-        "circle-opacity": 0.9,
+        "text-color": ["case", ["==", ["get", "role"], "primary"], light ? "#111" : C.white, cyan],
+        "text-halo-color": casing,
+        "text-halo-width": 1.8,
+        "text-opacity": ["case", ["==", ["get", "role"], "primary"], 1, 0.8],
       },
     },
     {
@@ -476,47 +430,17 @@ export function addOverlay(map: MLMap, light: boolean) {
       id: "om-endpoint-labels",
       type: "symbol",
       source: "om-endpoints",
+      minzoom: 10,
       layout: {
         "text-field": ["get", "label"],
         "text-font": FONT_BOLD,
-        "text-size": 9,
-        "text-letter-spacing": 0.15,
-        "text-offset": [0, 1.4],
+        "text-size": 10,
+        "text-offset": [0, 1.3],
         "text-anchor": "top",
+        "text-optional": true,
+        "symbol-sort-key": 5,
       },
       paint: { "text-color": light ? "#111" : C.white, "text-halo-color": casing, "text-halo-width": 1.5 },
-    },
-    {
-      id: "om-poi",
-      type: "circle",
-      source: "om-pois",
-      minzoom: 10,
-      paint: {
-        "circle-radius": ["case", ["boolean", ["feature-state", "hover"], false], 6, 4.5],
-        "circle-color": ["case", ["get", "community"], C.community, C.amber],
-        "circle-stroke-color": casing,
-        "circle-stroke-width": ["case", ["get", "pending"], 2.5, 1.5],
-        "circle-opacity": ["case", ["get", "pending"], 0.6, 1],
-      },
-    },
-    {
-      id: "om-poi-labels",
-      type: "symbol",
-      source: "om-pois",
-      minzoom: 11,
-      layout: {
-        "text-field": ["get", "name"],
-        "text-font": ["case", ["get", "community"], ["literal", ["Noto Sans Italic"]], ["literal", FONT]],
-        "text-size": 10,
-        "text-offset": [0.9, 0],
-        "text-anchor": "left",
-        "text-optional": true,
-      },
-      paint: {
-        "text-color": ["case", ["get", "community"], C.community, light ? "#7a4d00" : "#e8c48a"],
-        "text-halo-color": casing,
-        "text-halo-width": 1.4,
-      },
     },
     // locations
     {
@@ -537,27 +461,8 @@ export function addOverlay(map: MLMap, light: boolean) {
       type: "symbol",
       source: "om-locations",
       filter: ["has", "point_count"],
-      layout: {
-        "text-field": ["to-string", ["get", "point_count"]],
-        "text-font": FONT_BOLD,
-        "text-size": 11,
-        "text-allow-overlap": true,
-      },
+      layout: { "text-field": ["to-string", ["get", "point_count"]], "text-font": FONT_BOLD, "text-size": 11, "text-allow-overlap": true },
       paint: { "text-color": C.ice },
-    },
-    {
-      id: "om-loc-ring",
-      type: "circle",
-      source: "om-locations",
-      filter: ["!", ["has", "point_count"]],
-      maxzoom: 12.5,
-      paint: {
-        "circle-radius": ["interpolate", ["linear"], ["zoom"], 2, 9, 10, 13],
-        "circle-color": "rgba(0,0,0,0)",
-        "circle-stroke-color": ["case", ["get", "featured"], C.amber, light ? "#0f7f9c" : C.ice],
-        "circle-stroke-width": 1,
-        "circle-stroke-opacity": ["interpolate", ["linear"], ["zoom"], 10, 0.6, 12.5, 0],
-      },
     },
     {
       id: "om-loc-point",
@@ -566,12 +471,12 @@ export function addOverlay(map: MLMap, light: boolean) {
       filter: ["!", ["has", "point_count"]],
       maxzoom: 12.5,
       paint: {
-        "circle-radius": ["case", ["boolean", ["feature-state", "hover"], false], 6.5, 4.5],
-        "circle-color": ["case", ["get", "featured"], C.amber, light ? "#0f7f9c" : C.ice],
-        "circle-stroke-color": casing,
-        "circle-stroke-width": 1.5,
-        "circle-opacity": ["interpolate", ["linear"], ["zoom"], 10, 1, 12.5, 0],
-        "circle-stroke-opacity": ["interpolate", ["linear"], ["zoom"], 10, 1, 12.5, 0],
+        "circle-radius": ["case", hovering, 7, ["get", "active"], 6.5, 5],
+        "circle-color": ["case", ["get", "featured"], C.amber, cyan],
+        "circle-stroke-color": ["case", ["get", "active"], C.white, casing],
+        "circle-stroke-width": ["case", ["get", "active"], 2, 1.5],
+        "circle-opacity": ["interpolate", ["linear"], ["zoom"], 10, ["case", ["get", "dimmed"], 0.35, 1], 12.5, 0],
+        "circle-stroke-opacity": ["interpolate", ["linear"], ["zoom"], 10, ["case", ["get", "dimmed"], 0.35, 1], 12.5, 0],
       },
     },
     {
@@ -581,23 +486,21 @@ export function addOverlay(map: MLMap, light: boolean) {
       filter: ["!", ["has", "point_count"]],
       maxzoom: 12,
       layout: {
-        "text-field": [
-          "concat",
-          ["get", "name"],
-          ["case", [">", ["get", "media"], 0], ["concat", "\n", ["to-string", ["get", "media"]], " PHOTOS & CLIPS"], ""],
-        ],
-        "text-justify": "left",
+        "text-field": ["get", "name"],
         "text-font": FONT_BOLD,
-        "text-size": ["interpolate", ["linear"], ["zoom"], 3, 10, 9, 12],
-        "text-letter-spacing": 0.1,
-        "text-anchor": "left",
-        "text-offset": [1.2, 0],
+        "text-size": ["interpolate", ["linear"], ["zoom"], 3, 11, 9, 13],
+        "text-letter-spacing": 0.04,
+        "text-variable-anchor": ["left", "right"],
+        "text-radial-offset": 1,
         "text-optional": true,
+        "text-padding": 8,
+        "symbol-sort-key": ["get", "sort"],
       },
       paint: {
-        "text-color": ["case", ["get", "featured"], light ? "#8a5a00" : "#f0c98a", light ? "#0f5d72" : "#cdeef7"],
+        "text-color": ["case", ["get", "featured"], light ? "#8a5a00" : "#f0c98a", light ? "#0f5d72" : "#d4eff7"],
         "text-halo-color": casing,
         "text-halo-width": 1.6,
+        "text-opacity": ["case", ["get", "dimmed"], 0.45, 1],
       },
     },
     // draft (contribution drawing)
@@ -612,7 +515,7 @@ export function addOverlay(map: MLMap, light: boolean) {
       type: "line",
       source: "om-draft-line",
       layout: { "line-join": "round", "line-cap": "round" },
-      // Snapped routes draw solid; unsnapped straight segments stay dashed so they read as provisional.
+      // Snapped routes draw white; unsnapped straight segments amber so they read as provisional.
       paint: { "line-color": ["case", ["get", "snapped"], C.white, C.amber], "line-width": 3.5, "line-opacity": 0.95 },
     },
     {
@@ -620,26 +523,22 @@ export function addOverlay(map: MLMap, light: boolean) {
       type: "circle",
       source: "om-draft-vertices",
       paint: {
-        "circle-radius": ["case", ["boolean", ["feature-state", "hover"], false], 8, 6],
+        "circle-radius": ["case", hovering, 8, 6],
         "circle-color": ["case", ["get", "first"], C.white, ["get", "last"], C.amber, C.ink],
         "circle-stroke-color": C.white,
         "circle-stroke-width": 2,
       },
     },
+    {
+      id: "om-profile-cursor",
+      type: "circle",
+      source: "om-profile-cursor",
+      paint: { "circle-radius": 6, "circle-color": C.ink, "circle-stroke-color": C.white, "circle-stroke-width": 2.5 },
+    },
   ];
-  above.push({
-    id: "om-profile-cursor",
-    type: "circle",
-    source: "om-profile-cursor",
-    paint: { "circle-radius": 6, "circle-color": C.ink, "circle-stroke-color": C.white, "circle-stroke-width": 2.5 },
-  });
   for (const l of above) if (!map.getLayer(l.id)) map.addLayer(l);
 }
 
 export function setData(map: MLMap, id: string, data: FeatureCollection) {
   (map.getSource(id) as GeoJSONSource | undefined)?.setData(data);
-}
-
-export function locationOf(data: Data, id: string): Location | undefined {
-  return data.locations.find((l) => l.id === id);
 }

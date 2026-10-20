@@ -1,3 +1,6 @@
+/** Phase 2A: photos only. Video upload/hosting is deferred; seed clips stay in the data but are not shown. */
+export const VIDEO_ENABLED = false;
+
 import type { MediaItem } from "@/lib/domain/schema";
 import type { AtlasSnapshot } from "@/lib/repository/types";
 

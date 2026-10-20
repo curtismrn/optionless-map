@@ -1,17 +1,14 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Route, CircleDot, Layers, SlidersHorizontal, Compass, Star, Camera, Play, LocateFixed } from "lucide-react";
+import { ChevronLeft, ChevronRight, Route, CircleDot, Layers, SlidersHorizontal, Compass, Star, Camera, LocateFixed } from "lucide-react";
 import { app, useApp, useView, openDetail } from "@/lib/store";
 import {
-  ACTIVITY_CODE,
   ACTIVITY_LABEL,
   ACTIVITY_TYPES,
-  MOTORSPORT_ACTIVITIES,
   type Continent,
   type Location,
   type MediaItem,
-  type Variant,
 } from "@/lib/domain/schema";
 import { search, locationPasses, mediaIndex, DEFAULT_FILTERS, type Filters, type SearchHit } from "@/lib/search";
 import { bboxOf, haversine, type Coord } from "@/lib/geo";
@@ -142,7 +139,6 @@ function Thumb({ m, className }: { m?: MediaItem; className?: string }) {
 function RoadRow({ l, data, distanceKm, active }: { l: Location; data: Data; distanceKm?: number; active?: boolean }) {
   const media = roadMedia(data, l.id);
   const routes = data.variants.filter((v) => v.locationId === l.id && v.publication === "published").length;
-  const clips = media.filter((m) => m.kind === "clip").length;
   return (
     <button
       onClick={() => selectLocation(l.id)}
@@ -162,15 +158,10 @@ function RoadRow({ l, data, distanceKm, active }: { l: Location; data: Data; dis
           <span>{routes} route{routes === 1 ? "" : "s"}</span>
           {media.length > 0 ? (
             <span className="flex items-center gap-1 text-ice">
-              <Camera className="size-3" /> {media.length - clips}
-              {clips > 0 && (
-                <>
-                  <Play className="ml-1 size-3" /> {clips}
-                </>
-              )}
+              <Camera className="size-3" /> {media.length} photo{media.length === 1 ? "" : "s"}
             </span>
           ) : (
-            <span className="text-fg-faint">no media yet</span>
+            <span className="text-fg-faint">no photos yet</span>
           )}
         </span>
       </span>
@@ -342,7 +333,7 @@ function Discover() {
       {latest.length > 0 && (
         <>
           <div className="flex items-center justify-between px-3 pt-4 pb-1.5">
-            <span className="om-label">Latest photos & clips</span>
+            <span className="om-label">Latest photos</span>
           </div>
           <div className="grid grid-cols-3 gap-1 px-3">
             {latest.map((m, i) => {
@@ -353,12 +344,11 @@ function Discover() {
                   key={m.id}
                   onClick={() => openLightbox(latest, i)}
                   className="group relative aspect-square overflow-hidden bg-panel-3"
-                  aria-label={`${m.kind === "clip" ? "Clip" : "Photo"} — ${l?.name ?? ""}`}
+                  aria-label={`Photo — ${l?.name ?? ""}`}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={m.thumbUrl ?? m.url} alt="" loading="lazy" className="absolute inset-0 size-full object-cover transition-transform group-hover:scale-105" />
                   <span className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
-                  {m.kind === "clip" && <Play className="absolute top-1 left-1 size-3 fill-white text-white" />}
                   <span className="absolute right-1 bottom-1 left-1 truncate font-mono text-[8.5px] tracking-[0.06em] text-white/85 uppercase">{l?.name}</span>
                 </button>
               );
@@ -400,17 +390,6 @@ function Discover() {
   );
 }
 
-export function ActivityTag({ activity }: { activity: Variant["activity"] }) {
-  const ms = MOTORSPORT_ACTIVITIES.includes(activity);
-  return (
-    <span
-      title={ACTIVITY_LABEL[activity]}
-      className={cn("w-8 shrink-0 border px-0.5 text-center font-mono text-[9px] leading-[15px] tracking-[0.06em]", ms ? "border-signal/50 text-signal" : "border-ice/40 text-ice")}
-    >
-      {ACTIVITY_CODE[activity]}
-    </span>
-  );
-}
 
 // ---------------------------------------------------------------------------
 
