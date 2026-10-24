@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { Camera, ChevronDown, History, Loader2, LogOut, Mail, MapPinned, Pencil, Route, UserRound, Lock } from "lucide-react";
 import { app, useApp, sendMagicLink, signOut } from "@/lib/store";
 import { Button, cn, inputCls } from "@/components/ui";
+import { Wordmark } from "@/components/TopBar";
 
 function usePopover() {
   const [open, setOpen] = useState(false);
@@ -165,7 +166,9 @@ export function PrivateGate() {
         <div className="mb-1 flex items-center gap-2 text-ice">
           <Lock className="size-4" /> <span className="om-label text-ice">Private atlas</span>
         </div>
-        <h2 className="mb-3 font-display text-[24px] font-semibold text-white">OPTIONLESS MAP</h2>
+        <h2 className="mb-4">
+          <Wordmark className="h-[84px] w-[224px]" />
+        </h2>
         {auth.status === "not_member" ? (
           <p className="text-[12.5px] text-fg">
             {auth.email} isn&apos;t on the members list yet. Ask whoever runs the atlas to invite you, then reload.

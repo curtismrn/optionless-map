@@ -11,7 +11,7 @@ const archivo = Archivo({ subsets: ["latin", "latin-ext"], axes: ["wdth"], varia
 const plexMono = IBM_Plex_Mono({ subsets: ["latin", "latin-ext"], weight: ["400", "500"], variable: "--font-plex-mono" });
 
 export const metadata: Metadata = {
-  title: "OPTIONLESS MAP — automotive road atlas",
+  title: "OPTIONLESS Worldmap",
   description: "A community-built atlas of remarkable roads: passes, touge, hill climbs and rally roads, mapped and documented.",
 };
 

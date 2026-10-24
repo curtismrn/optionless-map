@@ -187,7 +187,7 @@ export function MapError() {
       <div className="max-w-md border border-line p-5 text-center">
         <div className="om-label mb-2 text-signal">Map unavailable</div>
         <p className="text-[13px] text-fg-dim">{err}</p>
-        <p className="mt-2 text-[12px] text-fg-faint">OPTIONLESS MAP needs a browser with WebGL2 enabled.</p>
+        <p className="mt-2 text-[12px] text-fg-faint">OPTIONLESS Worldmap needs a browser with WebGL2 enabled.</p>
       </div>
     </div>
   );

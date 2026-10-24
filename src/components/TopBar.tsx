@@ -8,17 +8,25 @@ import { AccountButton, EditMenu } from "@/components/edit/Account";
 import { STYLE_META, type StyleId } from "@/components/map/styles";
 import { cn } from "@/components/ui";
 
-export function Wordmark() {
+/** OPTIONLESS WORLDMAP logo. Used as a CSS mask so it takes the theme's text colour. */
+const LOGO = "url(/brand/mark-worldmap.svg)";
+export function Wordmark({ className = "h-12 w-[128px]" }: { className?: string }) {
   return (
-    <div className="flex select-none items-baseline gap-1.5 pr-1">
-      <span className="font-display text-[22px] leading-none tracking-[0.04em] text-fg" style={{ fontWeight: 700 }}>
-        OPTIONLESS
-      </span>
-      <span className="font-display text-[22px] leading-none tracking-[0.04em] text-ice" style={{ fontWeight: 500 }}>
-        MAP
-      </span>
-      <span className="ml-1 hidden font-mono text-[9px] tracking-[0.14em] text-fg-faint lg:inline">ATLAS · PROTO 0.1</span>
-    </div>
+    <span
+      role="img"
+      aria-label="OPTIONLESS Worldmap"
+      className={cn("block shrink-0 bg-fg", className)}
+      style={{
+        WebkitMaskImage: LOGO,
+        maskImage: LOGO,
+        WebkitMaskSize: "contain",
+        maskSize: "contain",
+        WebkitMaskRepeat: "no-repeat",
+        maskRepeat: "no-repeat",
+        WebkitMaskPosition: "left center",
+        maskPosition: "left center",
+      }}
+    />
   );
 }
 

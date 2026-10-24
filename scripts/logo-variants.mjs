@@ -7,6 +7,7 @@
 
 import { readFileSync, writeFileSync } from "node:fs";
 import opentype from "opentype.js";
+import { PNG } from "pngjs";
 
 const ORIGINAL = `data:image/png;base64,${readFileSync("public/brand/image.png").toString("base64")}`;
 const buf = readFileSync("assets/fonts/Saira-ExpandedExtraBoldItalic.ttf");
@@ -44,20 +45,46 @@ function setText(text, tracking) {
   return { d: paths.join(""), x0: CENTER_X - width / 2, x1: CENTER_X + width / 2 };
 }
 
+// Tight bounds of the artwork (bright pixels) for the transparent "mark" version.
+const png = PNG.sync.read(readFileSync("public/brand/image.png"));
+const BOX = (() => {
+  let x0 = png.width, y0 = png.height, x1 = 0, y1 = 0;
+  for (let y = 0; y < png.height; y++)
+    for (let x = 0; x < png.width; x++)
+      if (png.data[(y * png.width + x) * 4] > 40) {
+        x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y);
+      }
+  const pad = 2;
+  return { x: x0 - pad, y: y0 - pad, w: x1 - x0 + 1 + 2 * pad, h: y1 - y0 + 1 + 2 * pad };
+})();
+
 function variant(name, text, tracking = 0.04) {
   const t = setText(text, tracking);
   const gap = 9; // space between rule ends and the text, as in the original
+  // white artwork on black: the old rules + subtitle band is empty apart from them, so it is
+  // masked and both rules are redrawn fully as vectors (italic-cut ends) around the new text
+  const art = `<image href="${ORIGINAL}" xlink:href="${ORIGINAL}" x="0" y="0" width="712" height="301"/>
+    <rect x="40" y="230" width="632" height="22" fill="#000"/>
+    <polygon points="${rule(RULE.left, t.x0 - gap)}" fill="#fff"/>
+    <polygon points="${rule(t.x1 + gap, RULE.right)}" fill="#fff"/>
+    <path d="${t.d}" fill="#fff"/>`;
   const file = `logo-${name}.svg`;
   writeFileSync(
     `public/brand/${file}`,
     `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 712 301" width="712" height="301">
-  <image href="${ORIGINAL}" xlink:href="${ORIGINAL}" x="0" y="0" width="712" height="301"/>
-  <!-- the band holding the old rules + subtitle is empty apart from them: mask it and redraw
-       both rules fully as vectors (italic-cut ends, as in the original) around the new text -->
-  <rect x="40" y="230" width="632" height="22" fill="#000"/>
-  <polygon points="${rule(RULE.left, t.x0 - gap)}" fill="#fff"/>
-  <polygon points="${rule(t.x1 + gap, RULE.right)}" fill="#fff"/>
-  <path d="${t.d}" fill="#fff"/>
+  ${art}
+</svg>
+`,
+  );
+  // Transparent mark (white artwork, no background), cropped to the artwork: usable as an <img>
+  // on dark backgrounds or as a CSS mask to tint it with any colour.
+  writeFileSync(
+    `public/brand/mark-${name}.svg`,
+    `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="${BOX.x} ${BOX.y} ${BOX.w} ${BOX.h}" width="${BOX.w}" height="${BOX.h}">
+  <mask id="m" maskUnits="userSpaceOnUse" x="0" y="0" width="712" height="301" style="mask-type:luminance">
+    ${art}
+  </mask>
+  <rect x="0" y="0" width="712" height="301" fill="#fff" mask="url(#m)"/>
 </svg>
 `,
   );
@@ -71,6 +98,7 @@ writeFileSync(
   `<!doctype html><meta charset="utf-8"><title>Logo variants</title>
 <style>body{background:#000;color:#999;font:14px system-ui;margin:24px}figure{margin:0 0 28px}img{width:712px;max-width:100%;display:block;border:1px solid #222}</style>
 <figure><img src="image.png"><figcaption>original</figcaption></figure>
+<figure style="background:#f5f5f2;padding:12px"><img src="mark-worldmap.svg" style="width:300px;filter:invert(1);border:0"><figcaption>mark-worldmap.svg (transparent, inverted on light)</figcaption></figure>
 ${files.map((f) => `<figure><img src="${f}"><figcaption>${f}</figcaption></figure>`).join("\n")}
 `,
 );
