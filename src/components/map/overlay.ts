@@ -50,6 +50,14 @@ export function buildCollections(data: Data, filters: Filters, selection: AppSta
   // The selected route is always drawn, even if a filter or its pending status would hide it.
   const visibleVariants = data.variants.filter((v) => v.id === ctx.variantId || variantPasses(v, locById.get(v.locationId), filters, withMedia));
 
+  // index of each route among its road's routes — lets themes colour sibling routes differently
+  const siblingIndex = new Map<string, number>();
+  const counters = new Map<string, number>();
+  for (const v of data.variants) {
+    const n = counters.get(v.locationId) ?? 0;
+    siblingIndex.set(v.id, n);
+    counters.set(v.locationId, n + 1);
+  }
   const variantFeature = (v: Variant): Feature<LineString> => ({
     type: "Feature",
     id: v.id,
@@ -60,6 +68,7 @@ export function buildCollections(data: Data, filters: Filters, selection: AppSta
       role: routeRole(v, ctx),
       dashed: v.publication !== "published" || v.provenance.kind === "illustrative",
       oneWay: v.direction !== "both",
+      ci: siblingIndex.get(v.id) ?? 0,
     },
     geometry: { type: "LineString", coordinates: v.geometry.coordinates },
   });
@@ -231,7 +240,11 @@ export function addOverlay(map: MLMap, t: RouteTheme) {
   const firstSymbol = map.getStyle().layers.find((l) => l.type === "symbol" && !l.id.startsWith("om-"))?.id;
   const casing = t.casing;
   const cyan = t.route;
-  const lineColor: ExpressionSpecification = ["case", hovering, t.routeHover, cyan];
+  // optional per-route colour cycle (sibling routes of a road get different colours)
+  const cycled = (cycle: string[] | undefined, fallback: string): string | ExpressionSpecification =>
+    cycle?.length ? (["match", ["%", ["get", "ci"], cycle.length], ...cycle.flatMap((c, i) => [i, c]), fallback] as unknown as ExpressionSpecification) : fallback;
+  const routeFill = cycled(t.routeCycle, cyan);
+  const lineColor: ExpressionSpecification = ["case", hovering, t.routeHover, routeFill] as ExpressionSpecification;
   // primary is drawn by the om-sel-* layers; the base line underneath stays out of the way
   const lineOpacity = fadeIn(["case", hovering, 1, role(0.7, 1, 0.22, 0)]);
   const lineWidth = zoomWidth((b) => ["case", hovering, b * 1.8, role(b, b * 1.25, b * 0.8)] as ExpressionSpecification);
@@ -410,7 +423,7 @@ export function addOverlay(map: MLMap, t: RouteTheme) {
         "symbol-sort-key": ["case", ["==", ["get", "role"], "primary"], 0, 20],
       },
       paint: {
-        "text-color": ["case", ["==", ["get", "role"], "primary"], t.selected, t.routeLabel],
+        "text-color": ["case", ["==", ["get", "role"], "primary"], t.selected, cycled(t.routeCycle, t.routeLabel)],
         "text-halo-color": casing,
         "text-halo-width": 1.8,
         "text-opacity": ["case", ["==", ["get", "role"], "primary"], 1, 0.8],

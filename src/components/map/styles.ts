@@ -10,7 +10,17 @@
 // DARK and TOPOGRAPHIC are hand-built here; CLASSIC is OpenFreeMap's "liberty".
 
 import type { StyleSpecification, LayerSpecification, ExpressionSpecification } from "maplibre-gl";
-import type { Look } from "@/lib/look";
+import { Y2K_DARK, type Look, type Y2kDark } from "@/lib/look";
+
+/** Dark map palette for a 2000s dark variant, derived from a few base colours. */
+function y2kDarkPalette(m: (typeof Y2K_DARK)[Y2kDark]["map"]): Palette {
+  return {
+    bg: m.bg, water: m.water, waterway: m.water, forest: m.forest, grass: m.forest, ice: m.bg, urban: m.forest,
+    roadMajor: m.road, roadMid: m.road, roadMinor: m.roadMinor, roadCase: m.bg, rail: m.roadMinor,
+    boundary: m.boundary, label: m.label, labelStrong: "#ffffff", halo: m.bg,
+    hillShadow: "#000000", hillHighlight: m.road, hillExaggeration: 0.5,
+  };
+}
 
 export type StyleId = "dark" | "topo" | "satellite" | "classic";
 
@@ -472,7 +482,8 @@ function demSources(): StyleSpecification["sources"] {
 
 export function buildVectorStyle(id: "dark" | "topo", contourTilesUrl?: string, look: Look = "current"): StyleSpecification {
   const LOOK_PALETTE: Partial<Record<Look, Palette>> = { roadbook: ROADBOOK, nuit: NUIT, jgps: JGPS, bw: BW, y2k: Y2K, crt: CRT };
-  const p = id === "topo" ? TOPO : (LOOK_PALETTE[look] ?? DARK);
+  const y2kDark = look in Y2K_DARK ? y2kDarkPalette(Y2K_DARK[look as Y2kDark].map) : undefined;
+  const p = id === "topo" ? TOPO : (y2kDark ?? LOOK_PALETTE[look] ?? DARK);
   const lightSky = { ...SKY_DARK, "sky-color": "#dfe7ec", "horizon-color": p.bg, "fog-color": p.bg };
   const darkSky = { ...SKY_DARK, "horizon-color": p.labelStrong === "#7dffad" ? "#0b3a1c" : SKY_DARK["horizon-color"], "fog-color": p.bg };
   const sky =
@@ -480,7 +491,7 @@ export function buildVectorStyle(id: "dark" | "topo", contourTilesUrl?: string, 
       ? SKY_DARK
       : look === "nuit"
         ? { ...SKY_DARK, "sky-color": "#070c18", "horizon-color": "#1d2b45", "fog-color": "#0f1726" }
-        : look === "crt"
+        : look === "crt" || y2kDark
           ? darkSky
           : lightSky;
   const sources: StyleSpecification["sources"] = {

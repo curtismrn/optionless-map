@@ -11,7 +11,7 @@ import { SHARED_MODE, supabase } from "@/lib/supabase";
 import { DEFAULT_FILTERS, type Filters } from "@/lib/search";
 import type { StyleId } from "@/components/map/styles";
 import type { Coord } from "@/lib/geo";
-import type { Look } from "@/lib/look";
+import { DEFAULT_LOOK, type Look } from "@/lib/look";
 
 export type Selection = { type: "location" | "variant" | "poi"; id: string } | null;
 
@@ -143,7 +143,7 @@ export const app = createStore<AppState>({
   auth: { status: SHARED_MODE ? "loading" : "disabled" },
   publicRead: false,
   loadError: null,
-  look: "current",
+  look: DEFAULT_LOOK,
 });
 
 export const view = createStore<ViewState>({

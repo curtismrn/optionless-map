@@ -99,7 +99,10 @@ html[data-look="bw"] main img { filter: grayscale(1) contrast(1.25); }
 html[data-look="bw"] .bg-ice { color: #fff; }
 html[data-look="bw"] .om-label { text-transform: none; letter-spacing: normal; font-size: 12px; font-weight: 700; color: #000; }
 
-/* ---- 2000s: early-2000s skate site ----------------------------------- */
+/* ---- 2000s family: early-2000s skate site ------------------------------
+   Structure is shared by every html[data-look^="y2k"]; colours come from
+   variables. The khaki original sets them here, the dark variants get them
+   inline from Y2K_DARK (src/lib/look.ts → applyLookVars). */
 html[data-look="y2k"] {
   color-scheme: light;
   --color-ink: #c5c896;
@@ -117,30 +120,44 @@ html[data-look="y2k"] {
   --color-signal: #c41818;
   --color-community: #2c4e94;
   --color-ok: #2d6b2d;
-  --font-sans: "Times New Roman", Times, serif;
-  --font-display: var(--font-anton), Impact, sans-serif;
-  --font-mono: "Times New Roman", Times, serif;
-}
-html[data-look="y2k"] body {
-  font-size: 15px;
-  background-image: radial-gradient(rgba(0, 0, 0, 0.09) 1px, transparent 1.3px);
-  background-size: 5px 5px;
+  --y-a1: #2c4e94; --y-t1: #ffffff;
+  --y-a2: #c41818; --y-t2: #ffffff;
+  --y-a3: #1d1c16; --y-t3: #f2f0d8;
+  --y-a4: #2d6b2d; --y-t4: #ffffff;
+  --y-marker: #141410;
+  --y-link: #1a2a8c;
+  --y-dot: rgba(0, 0, 0, 0.08);
+  --y-header: #1d1c16;
+  --y-shadow: #141410;
 }
 html[data-look="y2k"] .text-white,
 html[data-look="y2k"] [class*="hover:text-white"]:hover { color: #141410; }
 html[data-look="y2k"] header.top-0 {
-  background: #1d1c16;
   --color-fg: #f2f0d8;
   --color-fg-dim: #d9d6b4;
   --color-fg-faint: #a9a689;
   --color-line: #55563f;
   --color-panel: #2b2d26;
   --color-ink: #1d1c16;
-  border-bottom: 3px solid #c41818;
 }
-html[data-look="y2k"] .om-panel {
-  background-color: #d6d8ab;
-  background-image: radial-gradient(rgba(0, 0, 0, 0.08) 1px, transparent 1.3px);
+
+html[data-look^="y2k"] {
+  --font-sans: "Times New Roman", Times, serif;
+  --font-display: var(--font-anton), Impact, sans-serif;
+  --font-mono: "Times New Roman", Times, serif;
+}
+html[data-look^="y2k"] body {
+  font-size: 15px;
+  background-image: radial-gradient(var(--y-dot) 1px, transparent 1.3px);
+  background-size: 5px 5px;
+}
+html[data-look^="y2k"] header.top-0 {
+  background: var(--y-header);
+  border-bottom: 3px solid var(--y-a2);
+}
+html[data-look^="y2k"] .om-panel {
+  background-color: var(--color-panel);
+  background-image: radial-gradient(var(--y-dot) 1px, transparent 1.3px);
   background-size: 4px 4px;
   border: 0;
   backdrop-filter: none;
@@ -148,17 +165,17 @@ html[data-look="y2k"] .om-panel {
   clip-path: polygon(0% 1.2%, 4% 0.2%, 9% 1.4%, 15% 0%, 21% 1.1%, 27% 0.3%, 34% 1.5%, 41% 0.2%, 48% 1.2%, 55% 0%, 62% 1.3%, 69% 0.4%, 76% 1.4%, 83% 0.1%, 90% 1.2%, 96% 0.3%, 100% 1%,
     100% 99%, 96% 99.8%, 90% 98.7%, 83% 99.9%, 76% 98.6%, 69% 99.7%, 62% 98.8%, 55% 100%, 48% 98.7%, 41% 99.8%, 34% 98.6%, 27% 99.7%, 21% 98.9%, 15% 100%, 9% 98.7%, 4% 99.8%, 0% 98.9%);
 }
-html[data-look="y2k"] .om-label {
+html[data-look^="y2k"] .om-label {
   font-family: var(--font-marker), cursive;
   text-transform: none;
   letter-spacing: normal;
   font-size: 15px;
-  color: #141410;
+  color: var(--y-marker);
 }
-html[data-look="y2k"] h3 {
+html[data-look^="y2k"] h3 {
   display: inline-block;
-  background: #2c4e94;
-  color: #fff;
+  background: var(--y-a1);
+  color: var(--y-t1);
   font-family: var(--font-anton), Impact, sans-serif;
   font-weight: 400;
   text-transform: uppercase;
@@ -166,12 +183,26 @@ html[data-look="y2k"] h3 {
   font-size: 15px;
   padding: 2px 10px 1px;
   transform: skewX(-8deg);
-  box-shadow: 3px 3px 0 #141410;
+  box-shadow: 3px 3px 0 var(--y-shadow);
 }
-html[data-look="y2k"] .font-display { text-transform: uppercase; font-weight: 400; letter-spacing: 0.02em; }
-html[data-look="y2k"] ul button { color: #1a2a8c; }
-html[data-look="y2k"] ul button span:first-child { text-decoration: underline; text-underline-offset: 2px; }
-html[data-look="y2k"] .uppercase { text-transform: none; }
+/* banner colours cycle through the variant's four accents */
+html[data-look^="y2k"] section:nth-of-type(4n + 2) h3 { background: var(--y-a2); color: var(--y-t2); }
+html[data-look^="y2k"] section:nth-of-type(4n + 3) h3 { background: var(--y-a3); color: var(--y-t3); }
+html[data-look^="y2k"] section:nth-of-type(4n + 4) h3 { background: var(--y-a4); color: var(--y-t4); }
+/* list accents cycle too — matching the route colours on the map */
+html[data-look^="y2k"] ul > li:nth-child(4n + 1) > button { border-left-color: var(--y-a1); }
+html[data-look^="y2k"] ul > li:nth-child(4n + 2) > button { border-left-color: var(--y-a2); }
+html[data-look^="y2k"] ul > li:nth-child(4n + 3) > button { border-left-color: var(--y-a3); }
+html[data-look^="y2k"] ul > li:nth-child(4n + 4) > button { border-left-color: var(--y-a4); }
+html[data-look^="y2k"] .font-display { text-transform: uppercase; font-weight: 400; letter-spacing: 0.02em; }
+html[data-look^="y2k"] ul button { color: var(--y-link); }
+html[data-look^="y2k"] ul button span:first-child { text-decoration: underline; text-underline-offset: 2px; }
+html[data-look^="y2k"] .uppercase { text-transform: none; }
+html[data-look^="y2k"] [class*="tracking-"] { letter-spacing: normal; }
+html[data-look^="y2k"] .om-ticks::before,
+html[data-look^="y2k"] .om-ticks::after { display: none; }
+/* the active look button / primary buttons take accent 2, like a sticker */
+html[data-look^="y2k"]:not([data-look="y2k"]) .bg-ice { background: var(--y-a2); color: var(--y-t2); }
 
 /* ---- CRT: cathode-ray neon ------------------------------------------- */
 html[data-look="crt"] {
@@ -218,11 +249,9 @@ html[data-look="crt"] .bg-ice { box-shadow: 0 0 12px #ff5ce1; color: #020402; te
 
 /* ---- shared ------------------------------------------------------------ */
 html[data-look="jgps"] [class*="tracking-"],
-html[data-look="bw"] [class*="tracking-"],
-html[data-look="y2k"] [class*="tracking-"] { letter-spacing: normal; }
+html[data-look="bw"] [class*="tracking-"] { letter-spacing: normal; }
 html[data-look="jgps"] .om-ticks::before, html[data-look="jgps"] .om-ticks::after,
 html[data-look="bw"] .om-ticks::before, html[data-look="bw"] .om-ticks::after,
-html[data-look="y2k"] .om-ticks::before, html[data-look="y2k"] .om-ticks::after,
 html[data-look="crt"] .om-ticks::before, html[data-look="crt"] .om-ticks::after { display: none; }
 html[data-look="bw"] .maplibregl-ctrl-scale, html[data-look="bw"] .maplibregl-ctrl-attrib,
 html[data-look="y2k"] .maplibregl-ctrl-scale, html[data-look="y2k"] .maplibregl-ctrl-attrib,

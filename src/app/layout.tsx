@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Barlow_Condensed, Barlow, Barlow_Semi_Condensed, Archivo, IBM_Plex_Sans, IBM_Plex_Mono, DotGothic16, VT323, Anton, Permanent_Marker } from "next/font/google";
 import "./globals.css";
 import "./looks.css";
+import { DEFAULT_LOOK, y2kDarkCss } from "@/lib/look";
 
 const barlow = Barlow_Condensed({ subsets: ["latin", "latin-ext"], weight: ["500", "600", "700"], variable: "--font-barlow" });
 const plex = IBM_Plex_Sans({ subsets: ["latin", "latin-ext"], weight: ["400", "500", "600"], variable: "--font-plex" });
@@ -23,13 +24,16 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#0a0c0e",
+  themeColor: "#161513",
   colorScheme: "dark",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${barlow.variable} ${plex.variable} ${plexMono.variable} ${barlowText.variable} ${barlowSemi.variable} ${archivo.variable} ${dotGothic.variable} ${vt323.variable} ${anton.variable} ${marker.variable}`}>
+    <html lang="en" data-look={DEFAULT_LOOK} className={`${barlow.variable} ${plex.variable} ${plexMono.variable} ${barlowText.variable} ${barlowSemi.variable} ${archivo.variable} ${dotGothic.variable} ${vt323.variable} ${anton.variable} ${marker.variable}`}>
+      <head>
+        <style dangerouslySetInnerHTML={{ __html: y2kDarkCss() }} />
+      </head>
       <body className="font-sans text-[13px]">{children}</body>
     </html>
   );

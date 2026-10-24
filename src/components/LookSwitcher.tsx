@@ -5,16 +5,20 @@
 
 import { useEffect } from "react";
 import { app, useApp } from "@/lib/store";
-import { LOOKS, initialLook, persistLook } from "@/lib/look";
+import { useState } from "react";
+import { LOOKS, initialLook, persistLook, showLookSwitcher } from "@/lib/look";
 import { cn } from "@/components/ui";
 
 export function LookSwitcher() {
   const look = useApp((s) => s.look);
+  const [visible, setVisible] = useState(false);
   useEffect(() => {
     const l = initialLook();
     persistLook(l);
     app.set({ look: l });
+    setVisible(showLookSwitcher());
   }, []);
+  if (!visible) return null;
   return (
     <div className="pointer-events-auto absolute bottom-[38px] left-1/2 z-[60] flex max-w-[calc(100vw-24px)] -translate-x-1/2 items-center gap-1 overflow-x-auto rounded-full border border-line-strong bg-panel/95 p-1 shadow-lg backdrop-blur [scrollbar-width:none]">
       <span className="px-2 text-[11px] text-fg-faint">Look</span>
