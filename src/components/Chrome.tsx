@@ -10,6 +10,7 @@ import { formatCoord, formatKm, lineLength, type Coord } from "@/lib/geo";
 import { zoomBy, resetNorth, resetGlobal, getMap, focusVariant, highlightRoute } from "@/components/map/controller";
 import { STYLE_META } from "@/components/map/styles";
 import { IconButton, cn } from "@/components/ui";
+import { SHARED_MODE } from "@/lib/supabase";
 import { COUNTRY_NAMES } from "@/data/seed";
 
 export function StatusBar() {
@@ -63,7 +64,7 @@ export function StatusBar() {
         BASEMAP <span className="text-fg-dim">{STYLE_META[style].code}</span>
       </span>
       <span className="hidden lg:inline" title="Seed geometry from OpenStreetMap via OSRM; contributions stored in this browser">
-        DATA <span className="text-fg-dim">OSM-DERIVED DEMO SET + LOCAL</span>
+        DATA <span className="text-fg-dim">{SHARED_MODE ? "SHARED ATLAS" : "OSM-DERIVED DEMO SET + LOCAL"}</span>
       </span>
     </footer>
   );

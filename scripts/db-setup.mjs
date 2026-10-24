@@ -18,7 +18,28 @@ if (!env.SUPABASE_DB_URL) {
   console.error("SUPABASE_DB_URL is missing in .env.local");
   process.exit(1);
 }
-const sql = postgres(env.SUPABASE_DB_URL, { ssl: "require", max: 1, onnotice: () => {} });
+// Passwords often contain URL-special characters (?, #, @, $…): split on the last "@"
+// and percent-encode the password ourselves instead of asking the user to.
+function safeDbUrl(raw) {
+  const m = /^(postgres(?:ql)?:\/\/)([^:/@]+):(.*)@([^@]+)$/.exec(raw.trim());
+  if (!m) throw new Error("SUPABASE_DB_URL doesn't look like postgresql://user:password@host:port/db");
+  const [, scheme, user, pass, rest] = m;
+  let decoded = pass;
+  try {
+    decoded = decodeURIComponent(pass);
+  } catch {
+    /* raw password with a literal % — keep as is */
+  }
+  return `${scheme}${user}:${encodeURIComponent(decoded)}@${rest}`;
+}
+let sql;
+try {
+  sql = postgres(safeDbUrl(env.SUPABASE_DB_URL), { ssl: "require", max: 1, onnotice: () => {} });
+} catch (e) {
+  // never echo the connection string: it contains the password
+  console.error(`Invalid SUPABASE_DB_URL (${e.code ?? e.message?.split("\n")[0]}). Copy the "Session pooler" URI from Supabase → Connect.`);
+  process.exit(1);
+}
 const seedOnly = process.argv.includes("--seed");
 
 try {

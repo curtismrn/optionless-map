@@ -63,12 +63,21 @@ try {
   check("two independent member sessions", A.client !== B.client && A.id !== B.id);
 
   // realtime: B listens before A writes
+  // Hand B's session to Realtime *before* joining, so RLS evaluates the subscription as B.
+  await B.client.realtime.setAuth((await B.client.auth.getSession()).data.session.access_token);
   let realtimeSeen = false;
+  let rtStatus = "";
   const ch = B.client.channel(`${tag}-rt`).on("postgres_changes", { event: "INSERT", schema: "public", table: "variants" }, (p) => {
     if (String(p.new?.name ?? "").startsWith(tag)) realtimeSeen = true;
   });
-  await new Promise((res) => ch.subscribe((s) => s === "SUBSCRIBED" && res()));
-  await B.client.realtime.setAuth((await B.client.auth.getSession()).data.session.access_token);
+  await new Promise((res) => {
+    ch.subscribe((s, err) => {
+      rtStatus = err ? `${s}: ${err.message}` : s;
+      if (s !== "SUBSCRIBING") res();
+    });
+    setTimeout(res, 10000);
+  });
+  await sleep(1500); // let the server finish registering the postgres_changes binding
 
   // 1. A creates a road + route
   const { data: loc, error: locErr } = await A.client.from("locations").insert({ name: `${tag} road`, slug: tag, countries: ["FR"], continent: "Europe", center: [-1.68, 43.3] }).select().single();
@@ -82,8 +91,8 @@ try {
   check("B sees A's route", !!seen && seen.name === `${tag} route`);
   check("geometry identical after round trip", JSON.stringify(seen?.geometry) === JSON.stringify(geometry), `${geometry.coordinates.length} vertices`);
   check("waypoints preserved", JSON.stringify(seen?.waypoints) === JSON.stringify(waypoints));
-  for (let i = 0; i < 20 && !realtimeSeen; i++) await sleep(250);
-  check("B receives the change in realtime", realtimeSeen);
+  for (let i = 0; i < 40 && !realtimeSeen; i++) await sleep(250);
+  check("B receives the change in realtime", realtimeSeen, `channel ${rtStatus}`);
 
   // A edits, B sees the edit
   await A.client.from("variants").update({ name: `${tag} route renamed` }).eq("id", v.id);

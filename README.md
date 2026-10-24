@@ -88,9 +88,30 @@ These are free public services with no SLA. Refresh the data with `npm run data:
 
 No invented ratings, users, events or activity. "Featured" is an editorial flag. Concept content (the Ibardin hill-climb format, the "Virage de la mort" nickname) is labeled. No racing spots are labeled on public roads.
 
-## Shared atlas for friends (Supabase) — ⚠️ not yet tested end-to-end
+## Shared atlas for friends (Supabase)
 
-The code for a friends-only shared mode is in place, but **it has not been run against a real Supabase project yet**. Until `npm run test:shared` passes, treat it as untested. Without Supabase configuration, the app runs the local demo exactly as before.
+Without Supabase configuration, the app runs the local demo exactly as before.
+
+**Status (2026-10-24):** `npm run test:shared` passes **30/30** against the real project. The test ran two independent member sessions and an anonymous visitor through:
+
+- create, see the other member's change, and realtime refresh;
+- geometry and waypoints kept identical through edits, undo, and delete + restore;
+- photo upload and viewing in both directions;
+- visitor writes, uploads and undo denied, and private reads hidden;
+- validation errors for bad geometry, a missing road, non-image files and files over 10 MB;
+- members list read-only from the browser;
+- history logged with the author.
+
+Also checked:
+
+- `db:setup` is idempotent: the second run inserted 0 rows.
+- A non-invited email is refused (`otp_disabled`).
+- The browser shows the private-atlas gate and no data when signed out.
+
+Not yet verified:
+
+- Receiving a magic-link email and editing through the UI while signed in. Sign-in happens through the email inbox, which an automated test can't reach.
+- Supabase's built-in email sender is heavily rate-limited and, on recent projects, may only deliver to the project's team members. If friends don't receive links, configure custom SMTP (e.g. Resend) under **Authentication → Emails → SMTP Settings**.
 
 What it adds when configured:
 

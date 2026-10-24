@@ -187,7 +187,23 @@ export function startShared() {
   started = true;
   const sb = supabase();
 
-  const resolve = async (session: { user: { id: string; email?: string } } | null) => {
+  // Someone else saved → reload (debounced). Realtime respects RLS, so the channel is
+  // (re)joined after the session is known — joining as anonymous would receive nothing.
+  let t: ReturnType<typeof setTimeout> | undefined;
+  const refresh = () => {
+    clearTimeout(t);
+    t = setTimeout(() => void loadData(), 400);
+  };
+  let ch: ReturnType<typeof sb.channel> | null = null;
+  const subscribe = async (accessToken: string | undefined) => {
+    if (ch) await sb.removeChannel(ch);
+    await sb.realtime.setAuth(accessToken ?? null);
+    ch = sb.channel("atlas-changes");
+    for (const table of ["locations", "variants", "pois", "photos"]) ch.on("postgres_changes", { event: "*", schema: "public", table }, refresh);
+    ch.subscribe();
+  };
+
+  const resolve = async (session: { user: { id: string; email?: string }; access_token?: string } | null) => {
     if (!session) {
       app.set({ auth: { status: "signed_out" } });
     } else {
@@ -201,21 +217,12 @@ export function startShared() {
     const { data: st } = await sb.from("atlas_settings").select("public_read").maybeSingle();
     app.set({ publicRead: !!st?.public_read });
     await loadData();
+    await subscribe(session?.access_token);
   };
   sb.auth.getSession().then(({ data }) => resolve(data.session));
   sb.auth.onAuthStateChange((event, session) => {
     if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "USER_UPDATED") void resolve(session);
   });
-
-  // Someone else saved → reload (debounced). Realtime respects RLS.
-  let t: ReturnType<typeof setTimeout> | undefined;
-  const refresh = () => {
-    clearTimeout(t);
-    t = setTimeout(() => void loadData(), 400);
-  };
-  const ch = sb.channel("atlas-changes");
-  for (const table of ["locations", "variants", "pois", "photos"]) ch.on("postgres_changes", { event: "*", schema: "public", table }, refresh);
-  ch.subscribe();
 }
 
 export async function sendMagicLink(email: string) {
