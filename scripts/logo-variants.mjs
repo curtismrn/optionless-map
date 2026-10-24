@@ -1,79 +1,70 @@
-// Logo variants: keep the original OPTIONLESS artwork, replace the "S-O Archives"
-// subtitle with dot-matrix text like an old handheld GPS LCD.
+// Logo variants: keep the original OPTIONLESS artwork (public/brand/image.png)
+// and replace the "S-O Archives" subtitle with new text set in the closest open
+// font to the original (Saira, expanded / extra-bold / italic — Eurostile-like),
+// converted to outlines so the SVG renders the same everywhere.
 //
 //   node scripts/logo-variants.mjs   → public/brand/logo-*.svg + preview.html
 
 import { readFileSync, writeFileSync } from "node:fs";
+import opentype from "opentype.js";
 
-// embedded: an SVG shown through <img> may not load external files
 const ORIGINAL = `data:image/png;base64,${readFileSync("public/brand/image.png").toString("base64")}`;
+const buf = readFileSync("assets/fonts/Saira-ExpandedExtraBoldItalic.ttf");
+const font = opentype.parse(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength));
 
-// 5×7 dot-matrix glyphs (rows top→bottom, "1" = lit dot)
-const G = {
-  M: ["10001", "11011", "10101", "10101", "10001", "10001", "10001"],
-  A: ["01110", "10001", "10001", "11111", "10001", "10001", "10001"],
-  P: ["11110", "10001", "10001", "11110", "10000", "10000", "10000"],
-  R: ["11110", "10001", "10001", "11110", "10100", "10010", "10001"],
-  O: ["01110", "10001", "10001", "10001", "10001", "10001", "01110"],
-  D: ["11100", "10010", "10001", "10001", "10001", "10010", "11100"],
-  T: ["11111", "00100", "00100", "00100", "00100", "00100", "00100"],
-  L: ["10000", "10000", "10000", "10000", "10000", "10000", "11111"],
-  S: ["01111", "10000", "10000", "01110", "00001", "00001", "11110"],
-  "◄": ["00010", "00110", "01110", "11110", "01110", "00110", "00010"],
-  "►": ["01000", "01100", "01110", "01111", "01110", "01100", "01000"],
-  " ": ["00000", "00000", "00000", "00000", "00000", "00000", "00000"],
-};
+// Measured on the original (712×301): subtitle caps span rows 234–248, centred on x≈256.5;
+// the horizontal rules are rows 242–246, from x=53 to the text and from the text to x=660.
+const CAP_TOP = 234, CAP_BOTTOM = 248.5, CENTER_X = 256.5;
+const RULE = { y: 241.6, h: 5.1, left: 53, right: 658 }; // measured incl. anti-aliasing
+const SLANT = 2.5; // px; inner ends cut on the italic angle, like the original
 
-// subtitle slot measured on public/brand/image.png (712×301)
-const SLOT = { x0: 146, x1: 367, y0: 232, y1: 250 };
-
-function dotText(text, { pitch = 2.5, r = 1.1, gap = 1 } = {}) {
-  const chars = [...text];
-  const cols = chars.length * 5 + (chars.length - 1) * gap;
-  const w = cols * pitch, h = 7 * pitch;
-  const ox = (SLOT.x0 + SLOT.x1) / 2 - w / 2 + pitch / 2;
-  const oy = (SLOT.y0 + SLOT.y1) / 2 - h / 2 + pitch / 2;
-  const dots = [];
-  chars.forEach((ch, ci) => {
-    const g = G[ch];
-    if (!g) throw new Error(`no glyph for ${ch}`);
-    g.forEach((row, y) =>
-      [...row].forEach((bit, x) => {
-        if (bit === "1") dots.push(`<circle cx="${(ox + (ci * (5 + gap) + x) * pitch).toFixed(2)}" cy="${(oy + y * pitch).toFixed(2)}" r="${r}"/>`);
-      }),
-    );
-  });
-  return { svg: dots.join(""), width: w };
+/** Rule from x0 to x1 (measured at mid-height) with both ends cut on the italic slant. */
+function rule(x0, x1) {
+  const y0 = RULE.y, y1 = RULE.y + RULE.h;
+  const pts = [[x0 + SLANT, y0], [x1 + SLANT, y0], [x1 - SLANT, y1], [x0 - SLANT, y1]];
+  return pts.map(([x, y]) => `${x.toFixed(1)},${y}`).join(" ");
 }
 
-function variant(name, text, opts) {
-  const { svg, width } = dotText(text, opts);
-  // widen the black patch only as much as the text needs, keeping the side rules
-  const pad = 8;
-  const cx = (SLOT.x0 + SLOT.x1) / 2;
-  const half = Math.max((SLOT.x1 - SLOT.x0) / 2, width / 2 + pad);
+function setText(text, tracking) {
+  const capH = (font.tables.os2.sCapHeight / font.unitsPerEm);
+  const size = (CAP_BOTTOM - CAP_TOP) / capH;
+  // measure with tracking (em fraction between letters)
+  // plain capitals: map characters straight to glyphs (no shaping needed, and opentype.js
+  // doesn't support one of this font's contextual lookups)
+  const glyphs = [...text].map((ch) => font.charToGlyph(ch));
+  const scale = size / font.unitsPerEm;
+  let width = 0;
+  glyphs.forEach((g, i) => (width += g.advanceWidth * scale + (i < glyphs.length - 1 ? tracking * size : 0)));
+  let x = CENTER_X - width / 2;
+  const paths = glyphs.map((g, i) => {
+    const p = g.getPath(x, CAP_BOTTOM, size).toPathData(2);
+    x += g.advanceWidth * scale + (i < glyphs.length - 1 ? tracking * size : 0);
+    return p;
+  });
+  return { d: paths.join(""), x0: CENTER_X - width / 2, x1: CENTER_X + width / 2 };
+}
+
+function variant(name, text, tracking = 0.04) {
+  const t = setText(text, tracking);
+  const gap = 9; // space between rule ends and the text, as in the original
   const file = `logo-${name}.svg`;
   writeFileSync(
     `public/brand/${file}`,
     `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 712 301" width="712" height="301">
   <image href="${ORIGINAL}" xlink:href="${ORIGINAL}" x="0" y="0" width="712" height="301"/>
-  <rect x="${(cx - half).toFixed(1)}" y="${SLOT.y0}" width="${(half * 2).toFixed(1)}" height="${SLOT.y1 - SLOT.y0}" fill="#000"/>
-  <!-- extend the horizontal rules (rows 242–246 in the original) up to the new, shorter text -->
-  <rect x="140" y="242" width="${(cx - width / 2 - 9 - 140).toFixed(1)}" height="5" fill="#fff"/>
-  <rect x="${(cx + width / 2 + 9).toFixed(1)}" y="242" width="${(372 - (cx + width / 2 + 9)).toFixed(1)}" height="5" fill="#fff"/>
-  <g fill="#fff" transform="translate(${cx.toFixed(1)} ${((SLOT.y0 + SLOT.y1) / 2).toFixed(1)}) skewX(-12) translate(${(-cx).toFixed(1)} ${(-(SLOT.y0 + SLOT.y1) / 2).toFixed(1)})">${svg}</g>
+  <!-- the band holding the old rules + subtitle is empty apart from them: mask it and redraw
+       both rules fully as vectors (italic-cut ends, as in the original) around the new text -->
+  <rect x="40" y="230" width="632" height="22" fill="#000"/>
+  <polygon points="${rule(RULE.left, t.x0 - gap)}" fill="#fff"/>
+  <polygon points="${rule(t.x1 + gap, RULE.right)}" fill="#fff"/>
+  <path d="${t.d}" fill="#fff"/>
 </svg>
 `,
   );
   return file;
 }
 
-const files = [
-  variant("map", "MAP"),
-  variant("map-arrows", "◄ MAP ►"),
-  variant("road-atlas", "ROAD ATLAS", { pitch: 2.1, r: 0.95 }),
-  variant("map-big", "MAP", { pitch: 3.1, r: 1.35, gap: 2 }),
-];
+const files = [variant("map", "MAP", 0.06), variant("worldmap", "WORLDMAP", 0.03), variant("world-map", "WORLD MAP", 0.03)];
 
 writeFileSync(
   "public/brand/preview.html",
