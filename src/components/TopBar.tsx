@@ -7,6 +7,27 @@ import { SHARED_MODE } from "@/lib/supabase";
 import { AccountButton, EditMenu } from "@/components/edit/Account";
 import { STYLE_META, type StyleId } from "@/components/map/styles";
 import { cn } from "@/components/ui";
+import { toggleSecretGps } from "@/components/LookSwitcher";
+
+/** The header logo; five quick taps toggle the secret retro-GPS look. */
+function SecretLogo() {
+  const taps = useRef<number[]>([]);
+  return (
+    <span
+      onClick={() => {
+        const now = Date.now();
+        taps.current = [...taps.current.filter((t) => now - t < 2000), now];
+        if (taps.current.length >= 5) {
+          taps.current = [];
+          toggleSecretGps();
+        }
+      }}
+      className="select-none"
+    >
+      <Wordmark />
+    </span>
+  );
+}
 
 /** OPTIONLESS WORLDMAP logo. Used as a CSS mask so it takes the theme's text colour. */
 const LOGO = "url(/brand/mark-worldmap.svg)";
@@ -80,7 +101,7 @@ export function TopBar() {
 
   return (
     <header className="pointer-events-auto absolute inset-x-0 top-0 z-30 flex h-14 items-center gap-3 border-b border-line bg-ink/92 px-3 backdrop-blur-md">
-      <Wordmark />
+      <SecretLogo />
       <div className="mx-1 hidden h-6 w-px bg-line md:block" />
       <div className="relative min-w-0 max-w-[460px] flex-1">
         <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-fg-faint" />

@@ -3,10 +3,19 @@
 // Design exploration switcher (design/explorations branch only).
 // Also reachable with ?look=current|roadbook|nuit.
 
-import { useEffect } from "react";
-import { app, useApp } from "@/lib/store";
-import { useState } from "react";
-import { LOOKS, initialLook, persistLook, showLookSwitcher } from "@/lib/look";
+import { useEffect, useState } from "react";
+import { app, useApp, toast } from "@/lib/store";
+import { DEFAULT_LOOK, LOOKS, initialLook, persistLook, showLookSwitcher } from "@/lib/look";
+
+/** Easter egg: flip between the shipped look and the retro Japanese car-nav look. */
+export function toggleSecretGps() {
+  const next = app.get().look === "jgps" ? DEFAULT_LOOK : "jgps";
+  persistLook(next);
+  app.set({ look: next });
+  toast(next === "jgps" ? "ナビ モード ON — retro GPS unlocked" : "Back to the atlas");
+}
+
+const KONAMI = ["ArrowUp", "ArrowUp", "ArrowDown", "ArrowDown", "ArrowLeft", "ArrowRight", "ArrowLeft", "ArrowRight", "b", "a"];
 import { cn } from "@/components/ui";
 
 export function LookSwitcher() {
@@ -17,6 +26,19 @@ export function LookSwitcher() {
     persistLook(l);
     app.set({ look: l });
     setVisible(showLookSwitcher());
+    // Konami code anywhere (except while typing)
+    let pos = 0;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.target instanceof Element && e.target.closest("input,textarea,select")) return;
+      const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+      pos = k === KONAMI[pos] ? pos + 1 : k === KONAMI[0] ? 1 : 0;
+      if (pos === KONAMI.length) {
+        pos = 0;
+        toggleSecretGps();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, []);
   if (!visible) return null;
   return (

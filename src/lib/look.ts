@@ -98,14 +98,16 @@ export function showLookSwitcher(): boolean {
 export function initialLook(): Look {
   if (typeof window === "undefined") return DEFAULT_LOOK;
   const q = new URLSearchParams(window.location.search).get("look");
-  // the saved choice only matters where the switcher is shown
-  const v = q ?? (!showLookSwitcher() ? null : (() => {
-    try {
-      return localStorage.getItem(KEY);
-    } catch {
-      return null;
-    }
-  })());
+  // saved by the dev switcher or the secret GPS mode
+  const v =
+    q ??
+    (() => {
+      try {
+        return localStorage.getItem(KEY);
+      } catch {
+        return null;
+      }
+    })();
   return LOOKS.some((l) => l.id === v) ? (v as Look) : DEFAULT_LOOK;
 }
 
