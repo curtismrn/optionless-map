@@ -130,6 +130,94 @@ const NUIT: Palette = {
   hillExaggeration: 0.5,
 };
 
+const JGPS: Palette = {
+  bg: "#ece4c6",
+  water: "#5d8fd8",
+  waterway: "#7aa6e3",
+  forest: "#cfdcae",
+  grass: "#dfe3bd",
+  ice: "#f2eedc",
+  urban: "#e2d2b8",
+  roadMajor: "#f2a91f",
+  roadMid: "#f5c652",
+  roadMinor: "#ffffff",
+  roadCase: "#ece4c6",
+  rail: "#8a8a8a",
+  boundary: "#a35a9c",
+  label: "#3b3a56",
+  labelStrong: "#1a2a55",
+  halo: "#ffffff",
+  hillShadow: "#b7a986",
+  hillHighlight: "#fffbea",
+  hillExaggeration: 0.25,
+};
+
+const BW: Palette = {
+  bg: "#ffffff",
+  water: "#d9d9d9",
+  waterway: "#bfbfbf",
+  forest: "#f1f1f1",
+  grass: "#f6f6f6",
+  ice: "#ffffff",
+  urban: "#ececec",
+  roadMajor: "#5c5c5c",
+  roadMid: "#8c8c8c",
+  roadMinor: "#b5b5b5",
+  roadCase: "#ffffff",
+  rail: "#9a9a9a",
+  boundary: "#000000",
+  label: "#3a3a3a",
+  labelStrong: "#000000",
+  halo: "#ffffff",
+  hillShadow: "#7a7a7a",
+  hillHighlight: "#ffffff",
+  hillExaggeration: 0.3,
+};
+
+const Y2K: Palette = {
+  bg: "#cfd1a4",
+  water: "#7d9b98",
+  waterway: "#6a8783",
+  forest: "#bfc48f",
+  grass: "#c7ca98",
+  ice: "#d9dbb7",
+  urban: "#c2b98f",
+  roadMajor: "#3b3a30",
+  roadMid: "#5c5a49",
+  roadMinor: "#8d8a6e",
+  roadCase: "#cfd1a4",
+  rail: "#6b6956",
+  boundary: "#2b2d26",
+  label: "#2b2d26",
+  labelStrong: "#141410",
+  halo: "#cfd1a4",
+  hillShadow: "#6f6e4f",
+  hillHighlight: "#eef0cf",
+  hillExaggeration: 0.45,
+};
+
+const CRT: Palette = {
+  bg: "#020402",
+  water: "#000000",
+  waterway: "#0a2a14",
+  forest: "#030803",
+  grass: "#040904",
+  ice: "#061006",
+  urban: "#071207",
+  roadMajor: "#1f7a3c",
+  roadMid: "#155a2b",
+  roadMinor: "#0e3d1d",
+  roadCase: "#020402",
+  rail: "#0e3d1d",
+  boundary: "#2bd46a",
+  label: "#2bd46a",
+  labelStrong: "#7dffad",
+  halo: "#020402",
+  hillShadow: "#000000",
+  hillHighlight: "#0b2a14",
+  hillExaggeration: 0.5,
+};
+
 const TOPO: Palette = {
   bg: "#171a14",
   water: "#0a1418",
@@ -383,13 +471,18 @@ function demSources(): StyleSpecification["sources"] {
 }
 
 export function buildVectorStyle(id: "dark" | "topo", contourTilesUrl?: string, look: Look = "current"): StyleSpecification {
-  const p = id === "topo" ? TOPO : look === "roadbook" ? ROADBOOK : look === "nuit" ? NUIT : DARK;
+  const LOOK_PALETTE: Partial<Record<Look, Palette>> = { roadbook: ROADBOOK, nuit: NUIT, jgps: JGPS, bw: BW, y2k: Y2K, crt: CRT };
+  const p = id === "topo" ? TOPO : (LOOK_PALETTE[look] ?? DARK);
+  const lightSky = { ...SKY_DARK, "sky-color": "#dfe7ec", "horizon-color": p.bg, "fog-color": p.bg };
+  const darkSky = { ...SKY_DARK, "horizon-color": p.labelStrong === "#7dffad" ? "#0b3a1c" : SKY_DARK["horizon-color"], "fog-color": p.bg };
   const sky =
-    id === "dark" && look === "roadbook"
-      ? { ...SKY_DARK, "sky-color": "#dfe7ec", "horizon-color": "#f5f5f2", "fog-color": "#f5f5f2" }
-      : id === "dark" && look === "nuit"
+    id !== "dark" || look === "current"
+      ? SKY_DARK
+      : look === "nuit"
         ? { ...SKY_DARK, "sky-color": "#070c18", "horizon-color": "#1d2b45", "fog-color": "#0f1726" }
-        : SKY_DARK;
+        : look === "crt"
+          ? darkSky
+          : lightSky;
   const sources: StyleSpecification["sources"] = {
     openmaptiles: { type: "vector", url: OFM_SOURCE },
     ...demSources(),
