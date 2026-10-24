@@ -12,6 +12,7 @@ import { ContributePanel } from "@/components/ContributePanel";
 import { StatusBar, MapControls, HoverCard, Toast, MapError, RoutePicker, SelectionChip } from "@/components/Chrome";
 import { Lightbox } from "@/components/media/Lightbox";
 import { SnapEngine } from "@/components/SnapEngine";
+import { LookSwitcher } from "@/components/LookSwitcher";
 
 const MapView = dynamic(() => import("@/components/map/MapView"), {
   ssr: false,
@@ -59,6 +60,7 @@ export function Atlas() {
         <SelectionChip />
         <MapControls />
         <StatusBar />
+        <LookSwitcher />
       </div>
       <HoverCard />
       <RoutePicker />

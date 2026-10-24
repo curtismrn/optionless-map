@@ -10,6 +10,7 @@
 // DARK and TOPOGRAPHIC are hand-built here; CLASSIC is OpenFreeMap's "liberty".
 
 import type { StyleSpecification, LayerSpecification, ExpressionSpecification } from "maplibre-gl";
+import type { Look } from "@/lib/look";
 
 export type StyleId = "dark" | "topo" | "satellite" | "classic";
 
@@ -82,6 +83,51 @@ const DARK: Palette = {
   hillShadow: "#000000",
   hillHighlight: "#3b454e",
   hillExaggeration: 0.55,
+};
+
+// Design exploration palettes (see lib/look.ts)
+const ROADBOOK: Palette = {
+  bg: "#f5f5f2",
+  water: "#c6d9e4",
+  waterway: "#a9c4d4",
+  forest: "#dde6d3",
+  grass: "#e7ebdd",
+  ice: "#ecebe6",
+  urban: "#e4e1da",
+  roadMajor: "#a29d93",
+  roadMid: "#b9b4aa",
+  roadMinor: "#cecac2",
+  roadCase: "#f5f5f2",
+  rail: "#b5b0a6",
+  boundary: "#8a8478",
+  label: "#5b574f",
+  labelStrong: "#2b2925",
+  halo: "#f5f5f2",
+  hillShadow: "#8f8a7e",
+  hillHighlight: "#ffffff",
+  hillExaggeration: 0.35,
+};
+
+const NUIT: Palette = {
+  bg: "#0f1726",
+  water: "#0a1220",
+  waterway: "#13213a",
+  forest: "#111b2a",
+  grass: "#121c2b",
+  ice: "#1a2433",
+  urban: "#18233a",
+  roadMajor: "#3a4c69",
+  roadMid: "#2b3a54",
+  roadMinor: "#212e45",
+  roadCase: "#0f1726",
+  rail: "#26334a",
+  boundary: "#4a5b78",
+  label: "#7d8ca6",
+  labelStrong: "#c7cfdd",
+  halo: "#0f1726",
+  hillShadow: "#050a14",
+  hillHighlight: "#2b3b57",
+  hillExaggeration: 0.5,
 };
 
 const TOPO: Palette = {
@@ -336,8 +382,14 @@ function demSources(): StyleSpecification["sources"] {
   };
 }
 
-export function buildVectorStyle(id: "dark" | "topo", contourTilesUrl?: string): StyleSpecification {
-  const p = id === "topo" ? TOPO : DARK;
+export function buildVectorStyle(id: "dark" | "topo", contourTilesUrl?: string, look: Look = "current"): StyleSpecification {
+  const p = id === "topo" ? TOPO : look === "roadbook" ? ROADBOOK : look === "nuit" ? NUIT : DARK;
+  const sky =
+    id === "dark" && look === "roadbook"
+      ? { ...SKY_DARK, "sky-color": "#dfe7ec", "horizon-color": "#f5f5f2", "fog-color": "#f5f5f2" }
+      : id === "dark" && look === "nuit"
+        ? { ...SKY_DARK, "sky-color": "#070c18", "horizon-color": "#1d2b45", "fog-color": "#0f1726" }
+        : SKY_DARK;
   const sources: StyleSpecification["sources"] = {
     openmaptiles: { type: "vector", url: OFM_SOURCE },
     ...demSources(),
@@ -350,7 +402,7 @@ export function buildVectorStyle(id: "dark" | "topo", contourTilesUrl?: string):
     name: `optionless-${id}`,
     glyphs: GLYPHS,
     projection: { type: "globe" },
-    sky: SKY_DARK,
+    sky,
     sources,
     layers: baseLayers(p, { contours: id === "topo" && !!contourTilesUrl }),
   };

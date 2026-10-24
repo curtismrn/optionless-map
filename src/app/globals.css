@@ -120,3 +120,98 @@ html, body {
 @media (max-width: 767px) {
   .maplibregl-ctrl-bottom-left, .maplibregl-ctrl-bottom-right { bottom: 58px !important; }
 }
+
+/* =========================================================================
+   Design explorations — html[data-look]. Tokens are CSS variables, so the
+   whole UI re-themes; the extra rules strip the "generated" tics (all-caps
+   tracked labels, monospace meta, corner ticks) from the new looks.
+   ========================================================================= */
+
+/* ---- Roadbook: printed rally roadbook / road map. Black ink, red marker. */
+html[data-look="roadbook"] {
+  color-scheme: light;
+  --color-ink: #f5f5f2;
+  --color-panel: #ffffff;
+  --color-panel-2: #f3f2ee;
+  --color-panel-3: #e9e7e1;
+  --color-line: #e0ddd6;
+  --color-line-strong: #bdb9b0;
+  --color-fg: #1c1c1a;
+  --color-fg-dim: #4f4c46;
+  --color-fg-faint: #858178;
+  --color-ice: #d7261e;
+  --color-ice-dim: #f2c6c3;
+  --color-amber: #a87a00;
+  --color-signal: #c0201a;
+  --color-community: #5b43b8;
+  --color-ok: #2f7d3a;
+  --font-sans: var(--font-barlow-text), system-ui, sans-serif;
+  --font-display: var(--font-barlow-semi), var(--font-barlow-text), sans-serif;
+  --font-mono: var(--font-barlow-text), system-ui, sans-serif;
+}
+html[data-look="roadbook"] body { font-size: 14px; }
+html[data-look="roadbook"] .text-white,
+html[data-look="roadbook"] [class*="hover:text-white"]:hover { color: var(--color-fg); }
+html[data-look="roadbook"] .om-panel {
+  background: #ffffff;
+  border-color: #d9d6cf;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.04), 0 8px 24px -12px rgba(30, 25, 15, 0.25);
+  backdrop-filter: none;
+}
+html[data-look="roadbook"] .font-display { font-weight: 700; letter-spacing: -0.005em; }
+/* the selected item reads like a highlighter stroke */
+html[data-look="roadbook"] [aria-selected="true"],
+html[data-look="roadbook"] [aria-pressed="true"] { background-image: linear-gradient(transparent 62%, rgba(255, 212, 59, 0.75) 62%); }
+
+/* ---- Nuit: night drive. Blue-black map, sodium-lamp orange, wide type. */
+html[data-look="nuit"] {
+  --color-ink: #0b1220;
+  --color-panel: #111a2b;
+  --color-panel-2: #16213a;
+  --color-panel-3: #1c2944;
+  --color-line: #22304b;
+  --color-line-strong: #34466b;
+  --color-fg: #efe7da;
+  --color-fg-dim: #b3aa9c;
+  --color-fg-faint: #7d8597;
+  --color-ice: #f0a040;
+  --color-ice-dim: #6b4a22;
+  --color-amber: #ffcf7a;
+  --color-signal: #ff6b4a;
+  --color-community: #b9a7ff;
+  --color-ok: #8fd19e;
+  --font-sans: var(--font-archivo), system-ui, sans-serif;
+  --font-display: var(--font-archivo), system-ui, sans-serif;
+  --font-mono: var(--font-archivo), system-ui, sans-serif;
+}
+html[data-look="nuit"] body { font-size: 14px; }
+html[data-look="nuit"] .font-display { font-stretch: 125%; font-weight: 800; letter-spacing: -0.015em; }
+html[data-look="nuit"] .om-panel { background: rgba(17, 26, 43, 0.96); border-color: #22304b; border-radius: 6px; }
+html[data-look="nuit"] .text-white { color: #fff6e8; }
+
+/* ---- shared de-tics for both new looks */
+html[data-look="roadbook"] .om-label,
+html[data-look="nuit"] .om-label {
+  text-transform: none;
+  letter-spacing: normal;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-fg-dim);
+}
+html[data-look="roadbook"] .uppercase,
+html[data-look="nuit"] .uppercase { text-transform: none; }
+html[data-look="roadbook"] [class*="tracking-"],
+html[data-look="nuit"] [class*="tracking-"] { letter-spacing: normal; }
+html[data-look="roadbook"] [class*="font-mono"],
+html[data-look="nuit"] [class*="font-mono"] { font-family: var(--font-sans); }
+html[data-look="roadbook"] .om-ticks::before,
+html[data-look="roadbook"] .om-ticks::after,
+html[data-look="nuit"] .om-ticks::before,
+html[data-look="nuit"] .om-ticks::after { display: none; }
+html[data-look="roadbook"] .om-hatch,
+html[data-look="nuit"] .om-hatch { background-image: none; }
+html[data-look="roadbook"] .maplibregl-ctrl-scale,
+html[data-look="roadbook"] .maplibregl-ctrl-attrib { background: rgba(255, 255, 255, 0.9) !important; color: #4f4c46 !important; }
+html[data-look="roadbook"] .maplibregl-ctrl-attrib a { color: #1c1c1a !important; }
+html[data-look="roadbook"] .maplibregl-ctrl-attrib-button { filter: none; }

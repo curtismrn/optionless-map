@@ -17,6 +17,7 @@ import { resolveRouteClick, selectionContext } from "@/lib/selection";
 import { bboxOf, type BBox, type Coord } from "@/lib/geo";
 import { buildVectorStyle, buildSatelliteStyle, buildClassicStyle, IS_LIGHT, TERRARIUM, type StyleId } from "./styles";
 import { addOverlay, buildCollections, buildDraft, setData, HIT_LAYERS, LOCATION_LAYERS, POI_LAYERS } from "./overlay";
+import { routeTheme, type Look } from "@/lib/look";
 import { setMapInstance, GLOBAL_VIEW, globalZoom, focusLocation, focusVariant, focusPoint } from "./controller";
 
 setWorkerUrl(new URL("maplibre-gl/dist/maplibre-gl-worker.mjs", import.meta.url).toString());
@@ -38,10 +39,10 @@ function contourTiles(): string {
   return url;
 }
 
-async function styleFor(id: StyleId): Promise<StyleSpecification> {
+async function styleFor(id: StyleId, look: Look): Promise<StyleSpecification> {
   if (id === "satellite") return buildSatelliteStyle();
   if (id === "classic") return buildClassicStyle();
-  return buildVectorStyle(id, id === "topo" ? contourTiles() : undefined);
+  return buildVectorStyle(id, id === "topo" ? contourTiles() : undefined, look);
 }
 
 export default function MapView() {
@@ -53,7 +54,7 @@ export default function MapView() {
     try {
       map = new MLMap({
         container: ref.current,
-        style: buildVectorStyle("dark"),
+        style: buildVectorStyle("dark", undefined, app.get().look),
         center: GLOBAL_VIEW.center,
         zoom: globalZoom(),
         minZoom: 0.4,
@@ -75,7 +76,7 @@ export default function MapView() {
     let hovered: { source: string; id: string | number } | null = null;
     let dragIndex: number | null = null;
 
-    const light = () => IS_LIGHT[currentStyle];
+    const theme = () => routeTheme(IS_LIGHT[currentStyle], app.get().look);
 
     // ---------- sync store → map ----------
     const pushData = () => {
@@ -129,7 +130,7 @@ export default function MapView() {
     };
 
     const onStyleLoad = () => {
-      addOverlay(map, light());
+      addOverlay(map, theme());
       pushData();
       pushDraft();
       applyLayers();
@@ -161,9 +162,9 @@ export default function MapView() {
         map.getCanvas().style.cursor = s.draw.active ? "crosshair" : "";
       }
       if (s.layers !== last.layers) applyLayers();
-      if (s.style !== last.style) {
+      if (s.style !== last.style || s.look !== last.look) {
         const next = s.style;
-        styleFor(next)
+        styleFor(next, s.look)
           .then((style) => {
             currentStyle = next;
             map.setStyle(style, { diff: false });

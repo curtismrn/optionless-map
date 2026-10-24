@@ -11,6 +11,7 @@ import { SHARED_MODE, supabase } from "@/lib/supabase";
 import { DEFAULT_FILTERS, type Filters } from "@/lib/search";
 import type { StyleId } from "@/components/map/styles";
 import type { Coord } from "@/lib/geo";
+import type { Look } from "@/lib/look";
 
 export type Selection = { type: "location" | "variant" | "poi"; id: string } | null;
 
@@ -76,6 +77,8 @@ export interface AppState {
   toast: string | null;
   mapError: string | null;
   auth: AuthState;
+  /** design exploration look (design/explorations branch) */
+  look: Look;
   /** Shared mode: may anonymous visitors read? (atlas_settings.public_read) */
   publicRead: boolean;
   loadError: string | null;
@@ -140,6 +143,7 @@ export const app = createStore<AppState>({
   auth: { status: SHARED_MODE ? "loading" : "disabled" },
   publicRead: false,
   loadError: null,
+  look: "current",
 });
 
 export const view = createStore<ViewState>({

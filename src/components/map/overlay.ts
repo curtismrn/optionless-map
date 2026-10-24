@@ -18,6 +18,7 @@ import { samplePoints, sliceByDistance, lineLength, type Coord } from "@/lib/geo
 import { variantPasses, locationPasses, mediaIndex, type Filters } from "@/lib/search";
 import { selectionContext, routeRole } from "@/lib/selection";
 import type { AppState } from "@/lib/store";
+import type { RouteTheme } from "@/lib/look";
 
 export const C = {
   ice: "#8fd6ea",
@@ -205,7 +206,7 @@ const hovering: ExpressionSpecification = ["boolean", ["feature-state", "hover"]
 /** Fade lines in from z5 to z7 while respecting their role opacity. */
 const fadeIn = (o: ExpressionSpecification): ExpressionSpecification => ["interpolate", ["linear"], ["zoom"], 5, 0, 7, o];
 
-export function addOverlay(map: MLMap, light: boolean) {
+export function addOverlay(map: MLMap, t: RouteTheme) {
   const empty = fc([]);
   const add = (id: string, extra: Record<string, unknown> = {}) => {
     if (!map.getSource(id)) map.addSource(id, { type: "geojson", data: empty, ...extra } as never);
@@ -228,9 +229,9 @@ export function addOverlay(map: MLMap, light: boolean) {
 
   // Route lines go beneath the basemap's first label layer so place names stay legible.
   const firstSymbol = map.getStyle().layers.find((l) => l.type === "symbol" && !l.id.startsWith("om-"))?.id;
-  const casing = light ? "#ffffff" : C.ink;
-  const cyan = light ? "#0f7f9c" : C.ice;
-  const lineColor: ExpressionSpecification = ["case", hovering, light ? "#004e63" : "#d6f3fb", cyan];
+  const casing = t.casing;
+  const cyan = t.route;
+  const lineColor: ExpressionSpecification = ["case", hovering, t.routeHover, cyan];
   // primary is drawn by the om-sel-* layers; the base line underneath stays out of the way
   const lineOpacity = fadeIn(["case", hovering, 1, role(0.7, 1, 0.22, 0)]);
   const lineWidth = zoomWidth((b) => ["case", hovering, b * 1.8, role(b, b * 1.25, b * 0.8)] as ExpressionSpecification);
@@ -290,7 +291,7 @@ export function addOverlay(map: MLMap, light: boolean) {
       type: "line",
       source: "om-selected",
       layout: { "line-cap": "round", "line-join": "round" },
-      paint: { "line-color": cyan, "line-width": zoomWidth((b) => b * 4.5), "line-blur": 6, "line-opacity": 0.35 },
+      paint: { "line-color": t.glow, "line-width": zoomWidth((b) => b * 4.5), "line-blur": 6, "line-opacity": t.glowOpacity },
     },
     {
       id: "om-sel-casing",
@@ -304,7 +305,7 @@ export function addOverlay(map: MLMap, light: boolean) {
       type: "line",
       source: "om-selected",
       layout: { "line-cap": "round", "line-join": "round" },
-      paint: { "line-color": light ? "#111" : C.white, "line-width": zoomWidth((b) => b * 1.7) },
+      paint: { "line-color": t.selected, "line-width": zoomWidth((b) => b * 1.7) },
     },
   ];
   for (const l of below) if (!map.getLayer(l.id)) map.addLayer(l, firstSymbol);
@@ -331,7 +332,7 @@ export function addOverlay(map: MLMap, light: boolean) {
         "icon-allow-overlap": true,
         "icon-ignore-placement": true,
       },
-      paint: { "icon-color": light ? "#fff" : C.ink, "icon-opacity": 0.95 },
+      paint: { "icon-color": t.selectedIcon, "icon-opacity": 0.95 },
     },
     {
       id: "om-var-arrows",
@@ -356,7 +357,7 @@ export function addOverlay(map: MLMap, light: boolean) {
       minzoom: 12,
       paint: {
         "circle-radius": ["case", hovering, 6, 4],
-        "circle-color": ["case", ["get", "community"], C.white, C.amber],
+        "circle-color": ["case", ["get", "community"], t.selected, t.poi],
         "circle-stroke-color": casing,
         "circle-stroke-width": 1.5,
         "circle-opacity": ["case", ["get", "pending"], 0.6, 0.95],
@@ -377,7 +378,7 @@ export function addOverlay(map: MLMap, light: boolean) {
         "text-optional": true,
         "symbol-sort-key": 30,
       },
-      paint: { "text-color": light ? "#7a4d00" : "#e8c48a", "text-halo-color": casing, "text-halo-width": 1.4 },
+      paint: { "text-color": t.poiLabel, "text-halo-color": casing, "text-halo-width": 1.4 },
     },
     {
       id: "om-hairpins",
@@ -409,7 +410,7 @@ export function addOverlay(map: MLMap, light: boolean) {
         "symbol-sort-key": ["case", ["==", ["get", "role"], "primary"], 0, 20],
       },
       paint: {
-        "text-color": ["case", ["==", ["get", "role"], "primary"], light ? "#111" : C.white, cyan],
+        "text-color": ["case", ["==", ["get", "role"], "primary"], t.selected, t.routeLabel],
         "text-halo-color": casing,
         "text-halo-width": 1.8,
         "text-opacity": ["case", ["==", ["get", "role"], "primary"], 1, 0.8],
@@ -421,8 +422,8 @@ export function addOverlay(map: MLMap, light: boolean) {
       source: "om-endpoints",
       paint: {
         "circle-radius": 6,
-        "circle-color": ["match", ["get", "kind"], "start", casing, light ? "#111" : C.white],
-        "circle-stroke-color": light ? "#111" : C.white,
+        "circle-color": ["match", ["get", "kind"], "start", casing, t.selected],
+        "circle-stroke-color": t.selected,
         "circle-stroke-width": 2,
       },
     },
@@ -440,7 +441,7 @@ export function addOverlay(map: MLMap, light: boolean) {
         "text-optional": true,
         "symbol-sort-key": 5,
       },
-      paint: { "text-color": light ? "#111" : C.white, "text-halo-color": casing, "text-halo-width": 1.5 },
+      paint: { "text-color": t.selected, "text-halo-color": casing, "text-halo-width": 1.5 },
     },
     // locations
     {
@@ -450,8 +451,8 @@ export function addOverlay(map: MLMap, light: boolean) {
       filter: ["has", "point_count"],
       paint: {
         "circle-radius": ["interpolate", ["linear"], ["get", "point_count"], 2, 13, 10, 22],
-        "circle-color": "rgba(143,214,234,0.14)",
-        "circle-stroke-color": C.ice,
+        "circle-color": t.clusterFill,
+        "circle-stroke-color": t.cluster,
         "circle-stroke-width": 1,
         "circle-pitch-alignment": "map",
       },
@@ -462,7 +463,7 @@ export function addOverlay(map: MLMap, light: boolean) {
       source: "om-locations",
       filter: ["has", "point_count"],
       layout: { "text-field": ["to-string", ["get", "point_count"]], "text-font": FONT_BOLD, "text-size": 11, "text-allow-overlap": true },
-      paint: { "text-color": C.ice },
+      paint: { "text-color": t.cluster },
     },
     {
       id: "om-loc-point",
@@ -472,8 +473,8 @@ export function addOverlay(map: MLMap, light: boolean) {
       maxzoom: 12.5,
       paint: {
         "circle-radius": ["case", hovering, 7, ["get", "active"], 6.5, 5],
-        "circle-color": ["case", ["get", "featured"], C.amber, cyan],
-        "circle-stroke-color": ["case", ["get", "active"], C.white, casing],
+        "circle-color": ["case", ["get", "featured"], t.pinFeatured, t.pin],
+        "circle-stroke-color": ["case", ["get", "active"], t.pinActive, casing],
         "circle-stroke-width": ["case", ["get", "active"], 2, 1.5],
         "circle-opacity": ["interpolate", ["linear"], ["zoom"], 10, ["case", ["get", "dimmed"], 0.35, 1], 12.5, 0],
         "circle-stroke-opacity": ["interpolate", ["linear"], ["zoom"], 10, ["case", ["get", "dimmed"], 0.35, 1], 12.5, 0],
@@ -497,7 +498,7 @@ export function addOverlay(map: MLMap, light: boolean) {
         "symbol-sort-key": ["get", "sort"],
       },
       paint: {
-        "text-color": ["case", ["get", "featured"], light ? "#8a5a00" : "#f0c98a", light ? "#0f5d72" : "#d4eff7"],
+        "text-color": ["case", ["get", "featured"], t.labelFeatured, t.label],
         "text-halo-color": casing,
         "text-halo-width": 1.6,
         "text-opacity": ["case", ["get", "dimmed"], 0.45, 1],
