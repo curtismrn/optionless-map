@@ -128,6 +128,6 @@ Setup:
    - Under **Authentication → Sign In / Providers**, keep Email on and **turn off "Allow new users to sign up"**.
    - Under **URL Configuration**, add your site URL (e.g. `http://localhost:3000`) to the Site URL and the Redirect URLs.
 3. Copy `.env.example` to `.env.local` and fill in `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` and `SUPABASE_DB_URL`. The last two are for local scripts only and must never be exposed to the browser.
-4. Run `npm run db:setup` to apply `supabase/migrations/` and seed the demo atlas. It is idempotent and never duplicates or overwrites rows.
+4. Run `npm run db:setup` to apply `supabase/migrations/`. The shared atlas starts **empty**; `npm run db:seed` optionally imports the demo atlas (idempotent, never duplicates). `npm run db:reset -- --yes` backs up to `backups/` and empties the atlas again (members are kept).
 5. Run `npm run invite -- friend@example.com "Name"` for each friend.
 6. Run `npm run test:shared`. It runs two member sessions plus an anonymous visitor through creation and editing, photos, RLS denials, validation errors and undo, then cleans up.

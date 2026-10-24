@@ -385,7 +385,11 @@ function Discover() {
             </li>
           ))}
       </ul>
-      {locs.length === 0 && <p className="px-3 py-4 text-[12px] text-fg-faint">No roads match the active filters.</p>}
+      {locs.length === 0 && (
+        <p className="px-3 py-4 text-[12px] leading-relaxed text-fg-faint">
+          {data.locations.length === 0 ? "The atlas is empty. Members can add the first road from Edit → New road." : "No roads match the active filters."}
+        </p>
+      )}
     </div>
   );
 }

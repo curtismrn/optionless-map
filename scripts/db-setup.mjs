@@ -1,7 +1,7 @@
 // Apply supabase/migrations/*.sql and seed the demo atlas into the shared database.
 //
-//   npm run db:setup            migrations + seed
-//   npm run db:setup -- --seed  seed only
+//   npm run db:setup     apply migrations only (the shared atlas starts empty)
+//   npm run db:seed      also import the demo atlas (8 roads, 15 routes, photos)
 //
 // Needs SUPABASE_DB_URL in .env.local (Dashboard → Project Settings → Database →
 // Connection string, "Session pooler" URI). Server-side only — never NEXT_PUBLIC_.
@@ -40,7 +40,8 @@ try {
   console.error(`Invalid SUPABASE_DB_URL (${e.code ?? e.message?.split("\n")[0]}). Copy the "Session pooler" URI from Supabase → Connect.`);
   process.exit(1);
 }
-const seedOnly = process.argv.includes("--seed");
+const withSeed = process.argv.includes("--seed-only") || process.argv.includes("--seed");
+const seedOnly = process.argv.includes("--seed-only");
 
 try {
   if (!seedOnly) {
@@ -51,6 +52,9 @@ try {
     }
   }
 
+  if (!withSeed) {
+    console.log("done (no demo data imported — run npm run db:seed for that)");
+  } else {
   const routes = JSON.parse(readFileSync("src/data/generated/routes.json", "utf8")).routes;
   const media = JSON.parse(readFileSync("src/data/generated/media.json", "utf8")).items;
   const viaFor = (v) => {
@@ -97,6 +101,7 @@ try {
     }
   });
   console.log("seed inserted (existing rows skipped):", counts);
+  }
 } finally {
   await sql.end();
 }
