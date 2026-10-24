@@ -108,9 +108,10 @@ Also checked:
 - A non-invited email is refused (`otp_disabled`).
 - The browser shows the private-atlas gate and no data when signed out.
 
-Not yet verified:
+Manually verified by the owner (2026-10-24): magic-link sign-in on localhost, then creating and editing roads, routes and photos through the UI.
 
-- Receiving a magic-link email and editing through the UI while signed in. Sign-in happens through the email inbox, which an automated test can't reach.
+Notes:
+
 - Supabase's built-in email sender is heavily rate-limited and, on recent projects, may only deliver to the project's team members. If friends don't receive links, configure custom SMTP (e.g. Resend) under **Authentication → Emails → SMTP Settings**.
 
 What it adds when configured:
