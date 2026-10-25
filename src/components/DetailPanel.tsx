@@ -11,6 +11,7 @@ import { ACTIVITY_LABEL, POI_LABEL, type Location, type Poi, type Variant, type 
 import { formatCoord, formatKm, lineLength, sliceByDistance, type Coord } from "@/lib/geo";
 import { focusLocation, focusPoint, focusVariant, highlightRoute } from "@/components/map/controller";
 import { ElevationProfile } from "@/components/ElevationProfile";
+import { WeatherBlock } from "@/components/Weather";
 import { MediaGrid, EmptyMedia } from "@/components/media/MediaGallery";
 import { PanelShell } from "@/components/PanelShell";
 import { Badge, Button, cn, ProvenanceBadge, PublicationBadge, VerificationBadge } from "@/components/ui";
@@ -48,6 +49,15 @@ function Header({ kicker, title, subtitle, back }: { kicker?: string; title: str
       </button>
     </div>
   );
+}
+
+/** A route's highest point (where the weather is harshest), from its elevation profile. */
+function highPoint(v: Variant): { at: Coord; elevation: number } | null {
+  const prof = v.elevation?.profile;
+  if (!prof?.length) return null;
+  const top = prof.reduce((a, b) => (b[1] > a[1] ? b : a));
+  const at = sliceByDistance(v.geometry.coordinates as Coord[], 0, top[0] * 1000).at(-1) ?? (v.geometry.coordinates[0] as Coord);
+  return { at, elevation: top[1] };
 }
 
 function Block({ title, aside, children }: { title: string; aside?: React.ReactNode; children: React.ReactNode }) {
@@ -266,6 +276,11 @@ function RoadDetail({ l }: { l: Location }) {
           <p className="text-[13px] leading-relaxed text-fg">{l.summary}</p>
         </div>
 
+        {(() => {
+          const top = all.map(highPoint).reduce<ReturnType<typeof highPoint>>((a, b) => (b && (!a || b.elevation > a.elevation) ? b : a), null);
+          return top ? <WeatherBlock at={top.at} elevation={top.elevation} where="High point" /> : <WeatherBlock at={l.center as Coord} />;
+        })()}
+
         <Block
           title={`Photos · ${photos.length}`}
           aside={<AddPhotoButton onClick={addPhoto} />}
@@ -399,6 +414,11 @@ function VariantDetail({ v }: { v: Variant }) {
             </div>
           </div>
         )}
+
+        {(() => {
+          const top = highPoint(v);
+          return top ? <WeatherBlock at={top.at} elevation={top.elevation} where="High point" /> : <WeatherBlock at={coords[Math.floor(coords.length / 2)]!} />;
+        })()}
 
         <Block
           title={`Photos of this route · ${own.length}`}
@@ -541,6 +561,7 @@ function PoiDetail({ p }: { p: Poi }) {
           {p.communityLabel && <p className="mb-2 text-[12px] text-fg-dim">Local nickname — not an official place name.</p>}
           <p className="text-[13px] leading-relaxed text-fg">{p.description || "No description yet."}</p>
         </div>
+        <WeatherBlock at={p.coordinates as Coord} />
         <Block title={`Photos · ${photos.length}`} aside={<AddPhotoButton onClick={addPhoto} />}>
           <Photos items={photos} onAdd={addPhoto} />
         </Block>
