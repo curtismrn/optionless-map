@@ -98,7 +98,7 @@ export class SharedRepository implements AtlasRepository, AtlasEditor {
       waypoints: (r.waypoints as LngLat[] | null) ?? undefined,
       elevation: (r.elevation as ElevationStats | null) ?? undefined,
       surface: (r.surface as string | null) ?? undefined,
-      countries: (r.countries as string[])?.length ? (r.countries as string[]) : ["FR"],
+      countries: (r.countries as string[]) ?? [],
       regions: (r.regions as string[]) ?? [],
       direction: r.direction as Variant["direction"],
       directionNote: (r.direction_note as string | null) ?? undefined,

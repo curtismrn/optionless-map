@@ -72,6 +72,14 @@ try {
       }),
     );
 
+    const line = { type: "LineString", coordinates: [[7.39, 43.97], [7.4, 43.98]] };
+    const [scout] = await tx`insert into public.variants (slug, name, activity, geometry, to_scout) values ('t', 'Test scout', 'touge', ${tx.json(line)}, true) returning id`;
+    check("member adds a route to scout without a road", !!scout?.id);
+    check(
+      "a driven route without a road is refused",
+      await fails(tx, () => tx`insert into public.variants (slug, name, activity, geometry) values ('t2', 'No road', 'touge', ${tx.json(line)})`),
+    );
+
     await as(tx, owner);
     await tx`select public.remove_member(${friend})`;
     await asAdmin(tx);

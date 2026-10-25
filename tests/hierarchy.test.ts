@@ -11,7 +11,7 @@ const locIds = new Set(SEED_LOCATIONS.map((l) => l.id));
 
 test("every variant belongs to an existing road, ids are unique", () => {
   assert.equal(new Set(SEED_VARIANTS.map((v) => v.id)).size, SEED_VARIANTS.length);
-  for (const v of SEED_VARIANTS) assert.ok(locIds.has(v.locationId), `${v.id} → ${v.locationId}`);
+  for (const v of SEED_VARIANTS) assert.ok(v.locationId && locIds.has(v.locationId), `${v.id} → ${v.locationId}`);
   for (const l of SEED_LOCATIONS) assert.ok(SEED_VARIANTS.some((v) => v.locationId === l.id), `${l.id} has no route`);
 });
 

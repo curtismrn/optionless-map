@@ -61,7 +61,7 @@ export function variantPasses(v: Variant, loc: Location | undefined, f: Filters,
   if (f.continents.length && (!loc || !f.continents.includes(loc.continent))) return false;
   if (f.verification === "verified" && v.verification === "unverified") return false;
   if (f.verification === "unverified" && v.verification !== "unverified") return false;
-  if (f.withMedia && !(withMedia?.has(v.id) || withMedia?.has(v.locationId))) return false;
+  if (f.withMedia && !(withMedia?.has(v.id) || (!!v.locationId && withMedia?.has(v.locationId)))) return false;
   return true;
 }
 
@@ -99,7 +99,7 @@ export function search(
   }
   if (filters.entity !== "locations") {
     for (const v of data.variants) {
-      const loc = locById.get(v.locationId);
+      const loc = v.locationId ? locById.get(v.locationId) : undefined;
       if (!variantPasses(v, loc, filters, withMedia)) continue;
       const { score, matched } = bestOf(q, [
         [v.name, 9],

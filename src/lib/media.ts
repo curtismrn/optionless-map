@@ -15,8 +15,8 @@ export function roadMedia(data: Pick<AtlasSnapshot, "variants" | "media">, locat
 }
 
 /** Media for one variant first, then the rest of its road. */
-export function variantMedia(data: Pick<AtlasSnapshot, "media">, v: { id: string; locationId: string }): MediaItem[] {
+export function variantMedia(data: Pick<AtlasSnapshot, "media">, v: { id: string; locationId: string | null }): MediaItem[] {
   const own = data.media.filter((m) => visible(m) && m.attachedTo.type === "variant" && m.attachedTo.id === v.id);
-  const road = data.media.filter((m) => visible(m) && m.attachedTo.type === "location" && m.attachedTo.id === v.locationId);
+  const road = data.media.filter((m) => visible(m) && !!v.locationId && m.attachedTo.type === "location" && m.attachedTo.id === v.locationId);
   return [...own, ...road];
 }

@@ -138,7 +138,7 @@ export function HoverCard() {
     const v = data.variants.find((x) => x.id === hover.id);
     if (!v) return null;
     const loc = data.locations.find((l) => l.id === v.locationId);
-    kicker = `${loc?.name ?? ""} · route`;
+    kicker = v.toScout ? `${loc ? `${loc.name} · ` : ""}route to scout` : `${loc?.name ?? ""} · route`;
     title = v.name;
     meta = `${ACTIVITY_LABEL[v.activity]} · ${formatKm(lineLength(v.geometry.coordinates as Coord[]))}${v.elevation ? ` · +${v.elevation.gainM} m` : ""}`;
   } else if (hover.type === "location") {

@@ -175,7 +175,7 @@ function RoadRow({ l, data, distanceKm, active }: { l: Location; data: Data; dis
 function spotRoadId(data: Data, p: Poi): string | undefined {
   if (!p.parent) return undefined;
   const { type, id } = p.parent;
-  return type === "location" ? id : data.variants.find((v) => v.id === id)?.locationId;
+  return type === "location" ? id : (data.variants.find((v) => v.id === id)?.locationId ?? undefined);
 }
 
 function spotMedia(data: Data, id: string): MediaItem[] {
@@ -297,7 +297,7 @@ function ScoutList({ data }: { data: Data }) {
       {isMember && (
         <div className="px-3 pt-2.5">
           <button
-            onClick={() => app.set({ contribute: { kind: "edit_variant", locationId: locId, toScout: true }, selection: null })}
+            onClick={() => app.set({ contribute: { kind: "edit_variant", locationId: locId ?? undefined, toScout: true }, selection: null })}
             className="flex h-8 w-full items-center justify-center gap-1.5 border border-dashed border-line-strong text-[12px] text-fg-dim hover:border-ice hover:text-ice"
           >
             <Plus className="size-3.5" /> Add a route to scout
@@ -323,7 +323,7 @@ function ScoutList({ data }: { data: Data }) {
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[13px] text-fg">{v.name}</span>
                     <span className="mt-0.5 block truncate font-mono text-[10px] tracking-[0.04em] text-fg-faint uppercase">
-                      {road?.name ?? "—"} · {formatKm(lineLength(v.geometry.coordinates as Coord[]))}
+                      {road?.name ?? v.countries.map((c) => COUNTRY_NAMES[c] ?? c).join(" / ")} · {formatKm(lineLength(v.geometry.coordinates as Coord[]))}
                     </span>
                   </span>
                 </button>
@@ -409,7 +409,7 @@ const REGIONS: { id: Continent; label: string }[] = [
 
 function flyToRegion(data: Data, continent: Continent) {
   const ids = new Set(data.locations.filter((l) => l.continent === continent && l.publication === "published").map((l) => l.id));
-  const coords = data.variants.filter((v) => ids.has(v.locationId)).flatMap((v) => v.geometry.coordinates as Coord[]);
+  const coords = data.variants.filter((v) => v.locationId && ids.has(v.locationId)).flatMap((v) => v.geometry.coordinates as Coord[]);
   if (!coords.length) return;
   const [w, s, e, n] = bboxOf(coords);
   getMap()?.fitBounds([[w, s], [e, n]], { padding: { top: 120, bottom: 80, left: 400, right: 80 }, maxZoom: 9, duration: 2000 });

@@ -116,7 +116,8 @@ export type Direction = z.infer<typeof Direction>;
 export const Variant = z
   .object({
     id: z.string(),
-    locationId: z.string(),
+    /** The Place this route is grouped under; null for a standalone route. */
+    locationId: z.string().nullable(),
     slug: z.string(),
     name: z.string().min(2).max(120),
     description: z.string().max(2000),
@@ -328,7 +329,7 @@ export const LocationInput = z.object({
 export type LocationInput = z.infer<typeof LocationInput>;
 
 export const VariantInput = z.object({
-  locationId: z.string().min(1, "Choose a road"),
+  locationId: z.string().min(1).nullable(),
   name: z.string().trim().min(2, "Name is too short").max(120),
   description: z.string().trim().max(2000),
   activity: ActivityType,

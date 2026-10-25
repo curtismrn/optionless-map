@@ -133,7 +133,7 @@ export function EditMenu() {
           <button role="menuitem" className={item} onClick={() => go(() => app.set({ contribute: { kind: "edit_location" }, selection: null }))}>
             <MapPinned className="size-4 text-ice" /> New road
           </button>
-          <button role="menuitem" className={item} onClick={() => go(() => app.set({ contribute: { kind: "edit_variant", locationId: locId } }))}>
+          <button role="menuitem" className={item} onClick={() => go(() => app.set({ contribute: { kind: "edit_variant", locationId: locId ?? undefined } }))}>
             <Route className="size-4 text-ice" /> New route{locId ? " on this road" : ""}
           </button>
           <button

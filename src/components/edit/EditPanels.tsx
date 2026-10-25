@@ -207,7 +207,9 @@ export function EditVariantPanel({ id, locationId, toScout }: { id?: string; loc
   const data = useApp((s) => s.data)!;
   const draw = useApp((s) => s.draw);
   const existing = id ? data.variants.find((v) => v.id === id) : undefined;
-  const [locId, setLocId] = useState(existing?.locationId ?? locationId ?? data.locations[0]?.id ?? "");
+  // "" = no road: allowed only for a route to scout (a new one to scout starts without a road)
+  const [locId, setLocId] = useState(existing ? (existing.locationId ?? "") : (locationId ?? (toScout ? "" : (data.locations[0]?.id ?? ""))));
+  const [country, setCountry] = useState(existing?.countries[0] ?? "");
   const loc = data.locations.find((l) => l.id === locId);
   const [f, setF] = useState({
     name: existing?.name ?? "",
@@ -253,16 +255,18 @@ export function EditVariantPanel({ id, locationId, toScout }: { id?: string; loc
     if (editLine && draw.snapStatus === "routing") return setErr("Still finding the road — wait a second.");
     if (geometry.length < 2) return setErr("Place at least two points on the map.");
     if (lineLength(geometry) < 100) return setErr("The route is shorter than 100 m.");
+    if (!locId && !f.toScout) return setErr("Choose a road — only a route to scout can stand alone.");
+    if (!locId && !country) return setErr("Choose the country this route is in.");
     const input = {
-      locationId: locId,
+      locationId: locId || null,
       name: f.name,
       description: f.description,
       activity: f.activity,
       direction: f.direction,
       surface: f.surface || undefined,
       toScout: f.toScout,
-      countries: existing?.countries ?? loc?.countries ?? [],
-      regions: existing?.regions ?? loc?.regions ?? [],
+      countries: !loc ? [country] : existing && existing.locationId === locId ? existing.countries : loc.countries,
+      regions: !loc ? [] : existing && existing.locationId === locId ? existing.regions : loc.regions,
       geometry: { type: "LineString" as const, coordinates: geometry as [number, number][] },
       waypoints: lineChanged ? (draw.snap && draw.waypoints.length <= 25 ? draw.waypoints : undefined) : (existing?.waypoints as [number, number][] | undefined),
     };
@@ -295,8 +299,10 @@ export function EditVariantPanel({ id, locationId, toScout }: { id?: string; loc
     try {
       await runEdit((e) => e.deleteVariant(existing.id), "Route deleted — undo from History if needed.");
       app.set({ draw: EMPTY_DRAW });
-      openDetail({ type: "location", id: existing.locationId });
-      focusLocation(existing.locationId);
+      if (existing.locationId) {
+        openDetail({ type: "location", id: existing.locationId });
+        focusLocation(existing.locationId);
+      } else app.set({ selection: null, contribute: null });
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Deleting failed");
     } finally {
@@ -308,8 +314,9 @@ export function EditVariantPanel({ id, locationId, toScout }: { id?: string; loc
     <PanelShell label={existing ? "Edit route" : "New route"}>
       <Header kicker={existing ? "Edit route · shared with all members" : "New route · shared with all members"} title={existing?.name ?? (loc ? `New route on ${loc.name}` : "New route")} />
       <div className="om-scroll min-h-0 flex-1 space-y-4 overflow-y-auto px-3 py-3">
-        <Field label="Road">
+        <Field label="Road" hint={f.toScout ? "Optional for a route to scout" : undefined}>
           <select className={inputCls} value={locId} onChange={(e) => setLocId(e.target.value)}>
+            {(f.toScout || !locId) && <option value="">None — standalone route to scout</option>}
             {data.locations.map((l) => (
               <option key={l.id} value={l.id}>
                 {l.name}
@@ -317,6 +324,20 @@ export function EditVariantPanel({ id, locationId, toScout }: { id?: string; loc
             ))}
           </select>
         </Field>
+        {!locId && (
+          <Field label="Country">
+            <select className={inputCls} value={country} onChange={(e) => setCountry(e.target.value)}>
+              <option value="">Choose…</option>
+              {Object.entries(COUNTRY_NAMES)
+                .sort((a, b) => a[1].localeCompare(b[1]))
+                .map(([code, name]) => (
+                  <option key={code} value={code}>
+                    {name}
+                  </option>
+                ))}
+            </select>
+          </Field>
+        )}
         <Field label="Route name" hint="e.g. “French-side ascent”, “Full crossing”">
           <input className={inputCls} value={f.name} maxLength={120} onChange={(e) => setF({ ...f, name: e.target.value })} />
         </Field>

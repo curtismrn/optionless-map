@@ -5,7 +5,7 @@
 
 import { useMemo, useState } from "react";
 import { X, ArrowLeft, Video, Camera, Flag, Spline, PencilLine, MapPinPlus, ChevronDown, ChevronRight, Pencil, Plus, Telescope, Check } from "lucide-react";
-import { app, useApp, view, openDetail, useCanEdit, runEdit } from "@/lib/store";
+import { app, useApp, view, openDetail, useCanEdit, runEdit, toast } from "@/lib/store";
 import { SHARED_MODE } from "@/lib/supabase";
 import { ACTIVITY_LABEL, POI_LABEL, type Location, type Poi, type Variant, type Contribution, type MediaItem } from "@/lib/domain/schema";
 import { formatCoord, formatKm, lineLength, sliceByDistance, type Coord } from "@/lib/geo";
@@ -315,11 +315,11 @@ function RoadDetail({ l }: { l: Location }) {
 function VariantDetail({ v }: { v: Variant }) {
   const data = useApp((s) => s.data)!;
   const loc = data.locations.find((l) => l.id === v.locationId);
-  const siblings = data.variants.filter((x) => x.locationId === v.locationId && x.id !== v.id && x.publication === "published");
+  const siblings = v.locationId ? data.variants.filter((x) => x.locationId === v.locationId && x.id !== v.id && x.publication === "published") : [];
   const coords = v.geometry.coordinates as Coord[];
   const lengthM = useMemo(() => lineLength(coords), [coords]);
   const own = data.media.filter((m) => m.attachedTo.type === "variant" && m.attachedTo.id === v.id && m.status !== "removed");
-  const roadWide = data.media.filter((m) => m.attachedTo.type === "location" && m.attachedTo.id === v.locationId && m.status !== "removed");
+  const roadWide = v.locationId ? data.media.filter((m) => m.attachedTo.type === "location" && m.attachedTo.id === v.locationId && m.status !== "removed") : [];
   const pois = data.pois.filter((p) => p.parent?.type === "variant" && p.parent.id === v.id && p.publication !== "rejected");
   const contributions = data.contributions.filter((c) => c.targetId === v.id || `var-${c.id}` === v.id || c.report?.subject.id === v.id);
   const addPhoto = () => app.set({ contribute: { kind: "add_media", target: { type: "variant", id: v.id } } });
@@ -349,7 +349,15 @@ function VariantDetail({ v }: { v: Variant }) {
           [<Pencil key="e" className="size-3" />, "Edit route", () => app.set({ contribute: { kind: "edit_variant", id: v.id } })],
           [<MapPinPlus key="s" className="size-3" />, "Add spot", () => app.set({ contribute: { kind: "edit_poi", parent: { type: "variant", id: v.id } } })],
           v.toScout
-            ? [<Check key="d" className="size-3" />, "We drove it", () => void runEdit((e) => e.setToScout(v.id, false), "Moved to the driven routes.").catch(() => {})]
+            ? [
+                <Check key="d" className="size-3" />,
+                "We drove it",
+                // a driven route needs a road: without one, open the form to pick it and untick "To scout"
+                () =>
+                  v.locationId
+                    ? void runEdit((e) => e.setToScout(v.id, false), "Moved to the driven routes.").catch(() => {})
+                    : (toast("Pick its road, then untick “To scout”."), app.set({ contribute: { kind: "edit_variant", id: v.id } })),
+              ]
             : [<Telescope key="d" className="size-3" />, "Back to scout", () => void runEdit((e) => e.setToScout(v.id, true), "Moved to To scout.").catch(() => {})],
         ]}
       />

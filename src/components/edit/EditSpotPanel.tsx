@@ -19,6 +19,7 @@ import { Button, Field, inputCls } from "@/components/ui";
 function nearestRoute(data: NonNullable<ReturnType<typeof app.get>["data"]>, p: Coord, maxM = 300) {
   let best: { variantId: string; locationId: string; d: number } | null = null;
   for (const v of data.variants) {
+    if (!v.locationId) continue; // spots attach to routes that belong to a road
     const d = distanceToLine(p, v.geometry.coordinates as Coord[]);
     if (d <= maxM && (!best || d < best.d)) best = { variantId: v.id, locationId: v.locationId, d };
   }

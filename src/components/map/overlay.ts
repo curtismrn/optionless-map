@@ -48,15 +48,16 @@ export function buildCollections(data: Data, filters: Filters, selection: AppSta
   const ctx = selectionContext(selection, data.variants, data.pois);
 
   // The selected route is always drawn, even if a filter or its pending status would hide it.
-  const visibleVariants = data.variants.filter((v) => v.id === ctx.variantId || variantPasses(v, locById.get(v.locationId), filters, withMedia));
+  const visibleVariants = data.variants.filter((v) => v.id === ctx.variantId || variantPasses(v, v.locationId ? locById.get(v.locationId) : undefined, filters, withMedia));
 
   // index of each route among its road's routes — lets themes colour sibling routes differently
   const siblingIndex = new Map<string, number>();
   const counters = new Map<string, number>();
   for (const v of data.variants) {
-    const n = counters.get(v.locationId) ?? 0;
+    const key = v.locationId ?? v.id;
+    const n = counters.get(key) ?? 0;
     siblingIndex.set(v.id, n);
-    counters.set(v.locationId, n + 1);
+    counters.set(key, n + 1);
   }
   const variantFeature = (v: Variant): Feature<LineString> => ({
     type: "Feature",
