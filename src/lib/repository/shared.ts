@@ -12,6 +12,7 @@ import {
   LocationInput,
   VariantInput,
   PhotoUpdate,
+  PoiInput,
   type Location,
   type Variant,
   type Poi,
@@ -223,6 +224,33 @@ export class SharedRepository implements AtlasRepository, AtlasEditor {
     const { error, count } = await this.sb.from("variants").delete({ count: "exact" }).eq("id", id);
     if (error) throw friendlyError(error, "Deleting the route failed");
     if (!count) throw new Error("Deleting the route failed: you need to be signed in as an invited member.");
+  }
+
+  // ------------------------------------------------------------------ spots
+
+  async savePoi(input: PoiInput, id?: string): Promise<string> {
+    const v = PoiInput.parse(input);
+    const row = {
+      location_id: v.parent.type === "location" ? v.parent.id : null,
+      variant_id: v.parent.type === "variant" ? v.parent.id : null,
+      name: v.name,
+      category: v.category,
+      description: v.description,
+      community_label: v.communityLabel,
+      coordinates: v.coordinates,
+    };
+    const q = id
+      ? this.sb.from("pois").update(row).eq("id", id).select("id").single()
+      : this.sb.from("pois").insert({ ...row, provenance: { kind: "community", source: "Added by a member" } }).select("id").single();
+    const { data, error } = await q;
+    if (error) throw friendlyError(error, "Saving the spot failed");
+    return data.id as string;
+  }
+
+  async deletePoi(id: string) {
+    const { error, count } = await this.sb.from("pois").delete({ count: "exact" }).eq("id", id);
+    if (error) throw friendlyError(error, "Deleting the spot failed");
+    if (!count) throw new Error("Deleting the spot failed: you need to be signed in as an invited member.");
   }
 
   // ------------------------------------------------------------------ photos

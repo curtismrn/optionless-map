@@ -139,6 +139,22 @@ export function EditMenu() {
           <button
             role="menuitem"
             className={item}
+            onClick={() =>
+              go(() =>
+                app.set({
+                  contribute: {
+                    kind: "edit_poi",
+                    parent: selection && selection.type !== "poi" ? { type: selection.type, id: selection.id } : undefined,
+                  },
+                }),
+              )
+            }
+          >
+            <MapPinned className="size-4 text-ice" /> New spot
+          </button>
+          <button
+            role="menuitem"
+            className={item}
             disabled={!selection}
             onClick={() => go(() => selection && app.set({ contribute: { kind: "add_media", target: selection } }))}
           >

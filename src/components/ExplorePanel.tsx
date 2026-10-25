@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Route, CircleDot, Layers, SlidersHorizontal, Compass, Star, Camera, LocateFixed } from "lucide-react";
+import { ChevronLeft, ChevronRight, Route, CircleDot, Layers, SlidersHorizontal, Compass, Star, Camera, LocateFixed, MapPin, Plus } from "lucide-react";
 import { app, useApp, useView, openDetail } from "@/lib/store";
 import {
   ACTIVITY_LABEL,
@@ -9,6 +9,8 @@ import {
   type Continent,
   type Location,
   type MediaItem,
+  type Poi,
+  POI_LABEL,
 } from "@/lib/domain/schema";
 import { search, locationPasses, mediaIndex, DEFAULT_FILTERS, type Filters, type SearchHit } from "@/lib/search";
 import { bboxOf, haversine, type Coord } from "@/lib/geo";
@@ -169,6 +171,110 @@ function RoadRow({ l, data, distanceKm, active }: { l: Location; data: Data; dis
   );
 }
 
+/** The road a spot belongs to (directly, or through its route). */
+function spotRoadId(data: Data, p: Poi): string | undefined {
+  return p.parent.type === "location" ? p.parent.id : data.variants.find((v) => v.id === p.parent.id)?.locationId;
+}
+
+function spotMedia(data: Data, id: string): MediaItem[] {
+  return data.media.filter((m) => m.status !== "removed" && m.attachedTo.type === "poi" && m.attachedTo.id === id);
+}
+
+function selectSpot(p: Poi) {
+  openDetail({ type: "poi", id: p.id });
+  focusPoint(p.coordinates as Coord);
+}
+
+/** A spot as a card: its own cover, name, type, road and photo count. */
+function SpotRow({ p, data, active }: { p: Poi; data: Data; active?: boolean }) {
+  const media = spotMedia(data, p.id);
+  const road = data.locations.find((l) => l.id === spotRoadId(data, p));
+  return (
+    <button onClick={() => selectSpot(p)} className={cn("group flex w-full items-center gap-3 px-3 py-2 text-left", active ? "bg-ice/8" : "hover:bg-panel-2")}>
+      {media.length ? (
+        <Thumb m={media[0]} className="h-12 w-16" />
+      ) : (
+        <span className="grid h-12 w-16 shrink-0 place-items-center border border-line text-fg-faint group-hover:text-ice">
+          <MapPin className="size-4" />
+        </span>
+      )}
+      <span className="min-w-0 flex-1">
+        <span className="block truncate font-display text-[16px] leading-tight font-semibold tracking-[0.02em] text-fg group-hover:text-white">{p.name}</span>
+        <span className="mt-0.5 block truncate font-mono text-[10px] tracking-[0.04em] text-fg-faint uppercase">
+          {POI_LABEL[p.category]}
+          {road && ` · ${road.name}`}
+        </span>
+        <span className="mt-0.5 flex items-center gap-2.5 font-mono text-[10px] text-fg-dim tabular-nums">
+          {media.length > 0 ? (
+            <span className="flex items-center gap-1 text-ice">
+              <Camera className="size-3" /> {media.length} photo{media.length === 1 ? "" : "s"}
+            </span>
+          ) : (
+            <span className="text-fg-faint">no photos yet</span>
+          )}
+        </span>
+      </span>
+    </button>
+  );
+}
+
+function SpotsList({ data }: { data: Data }) {
+  const selection = useApp((s) => s.selection);
+  const isMember = useApp((s) => s.auth.status === "member");
+  const visibleIds = useView((s) => s.visibleVariantIds);
+  const count = (id: string) => spotMedia(data, id).length;
+  const spots = data.pois.filter((p) => p.publication === "published").sort((a, b) => count(b.id) - count(a.id) || a.name.localeCompare(b.name));
+  // in view = the spot's route (or a route of its road) is on screen
+  const visibleSet = new Set(visibleIds);
+  const inView = spots.filter((p) => data.variants.some((v) => (p.parent.type === "variant" ? v.id === p.parent.id : v.locationId === p.parent.id) && visibleSet.has(v.id)));
+  const active = selection?.type === "poi" ? selection.id : undefined;
+  return (
+    <div className="pb-3">
+      {isMember && (
+        <div className="px-3 pt-3">
+          <button
+            onClick={() => app.set({ contribute: { kind: "edit_poi", parent: selection && selection.type !== "poi" ? { type: selection.type, id: selection.id } : undefined } })}
+            className="flex h-8 w-full items-center justify-center gap-1.5 border border-dashed border-line-strong text-[12px] text-fg-dim hover:border-ice hover:text-ice"
+          >
+            <Plus className="size-3.5" /> Drop a spot on the map
+          </button>
+        </div>
+      )}
+      {inView.length > 0 && inView.length < spots.length && (
+        <>
+          <div className="flex items-center justify-between px-3 pt-4 pb-1">
+            <span className="om-label">In the current view</span>
+            <span className="om-label tabular-nums">{inView.length}</span>
+          </div>
+          <ul>
+            {inView.slice(0, 6).map((p) => (
+              <li key={p.id}>
+                <SpotRow p={p} data={data} active={active === p.id} />
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      <div className="px-3 pt-4 pb-1">
+        <span className="om-label">All spots · {spots.length}</span>
+      </div>
+      {spots.length === 0 ? (
+        <p className="px-3 py-4 text-[12px] leading-relaxed text-fg-faint">
+          No spots yet — a drift corner, a viewpoint, a meet-up car park.{isMember ? " Drop the first one above, then add your photos to it." : ""}
+        </p>
+      ) : (
+        <ul>
+          {spots.map((p) => (
+            <li key={p.id}>
+              <SpotRow p={p} data={data} active={active === p.id} />
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function Results() {
   const query = useApp((s) => s.query);
   const filters = useApp((s) => s.filters);
@@ -254,6 +360,7 @@ function Discover() {
   const selection = useApp((s) => s.selection);
   const visibleIds = useView((s) => s.visibleVariantIds);
   const [near, setNear] = useState<{ status: "idle" | "locating" | "ok" | "denied"; at?: Coord }>({ status: "idle" });
+  const [view, setView] = useState<"roads" | "spots">("roads");
 
   if (!data) return <div className="px-3 py-6 font-mono text-[10px] text-fg-faint">LOADING ATLAS…</div>;
   const withMedia = mediaIndex(data.media);
@@ -265,9 +372,38 @@ function Discover() {
     selection?.type === "location" ? selection.id : selection?.type === "variant" ? data.variants.find((v) => v.id === selection.id)?.locationId : undefined;
   const regionCounts = new Map<Continent, number>();
   for (const l of locs) regionCounts.set(l.continent, (regionCounts.get(l.continent) ?? 0) + 1);
-  const latest = [...data.media.filter((m) => m.source === "local"), ...data.media.filter((m) => m.source === "commons" && m.capturedAt).sort((a, b) => (b.capturedAt ?? "").localeCompare(a.capturedAt ?? ""))]
+  // member uploads (shared) and this browser's photos (demo) first, newest first; then dated Commons photos
+  const latest = [
+    ...data.media.filter((m) => m.source !== "commons").sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? "")),
+    ...data.media.filter((m) => m.source === "commons" && m.capturedAt).sort((a, b) => (b.capturedAt ?? "").localeCompare(a.capturedAt ?? "")),
+  ]
     .filter((m) => m.status !== "removed")
     .slice(0, 6);
+  const nSpots = data.pois.filter((p) => p.publication === "published").length;
+  const viewToggle = (
+    <div className="flex border-b border-line px-3 pt-2.5">
+      {(["roads", "spots"] as const).map((v) => (
+        <button
+          key={v}
+          onClick={() => setView(v)}
+          className={cn(
+            "relative mr-4 pb-2 font-display text-[15px] font-semibold tracking-[0.04em] uppercase transition-colors",
+            view === v ? "text-fg" : "text-fg-faint hover:text-fg-dim",
+          )}
+        >
+          {v === "roads" ? "Roads" : "Spots"} <span className="font-mono text-[10px] text-fg-faint tabular-nums">{v === "roads" ? locs.length : nSpots}</span>
+          {view === v && <span className="absolute inset-x-0 -bottom-px h-0.5 bg-ice" />}
+        </button>
+      ))}
+    </div>
+  );
+  if (view === "spots")
+    return (
+      <>
+        {viewToggle}
+        <SpotsList data={data} />
+      </>
+    );
 
   const locate = () => {
     if (!navigator.geolocation) return setNear({ status: "denied" });
@@ -285,6 +421,7 @@ function Discover() {
 
   return (
     <div className="pb-3">
+      {viewToggle}
       <div className="px-3 pt-3">
         <div className="om-label mb-2">Explore by region</div>
         <div className="flex flex-wrap gap-1">
@@ -337,19 +474,20 @@ function Discover() {
           </div>
           <div className="grid grid-cols-3 gap-1 px-3">
             {latest.map((m, i) => {
-              const locId = m.attachedTo.type === "location" ? m.attachedTo.id : data.variants.find((v) => v.id === m.attachedTo.id)?.locationId;
+              const spot = m.attachedTo.type === "poi" ? data.pois.find((p) => p.id === m.attachedTo.id) : undefined;
+              const locId = spot ? spotRoadId(data, spot) : m.attachedTo.type === "location" ? m.attachedTo.id : data.variants.find((v) => v.id === m.attachedTo.id)?.locationId;
               const l = data.locations.find((x) => x.id === locId);
               return (
                 <button
                   key={m.id}
                   onClick={() => openLightbox(latest, i)}
                   className="group relative aspect-square overflow-hidden bg-panel-3"
-                  aria-label={`Photo — ${l?.name ?? ""}`}
+                  aria-label={`Photo — ${spot?.name ?? l?.name ?? ""}`}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={m.thumbUrl ?? m.url} alt="" loading="lazy" className="absolute inset-0 size-full object-cover transition-transform group-hover:scale-105" />
                   <span className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
-                  <span className="absolute right-1 bottom-1 left-1 truncate font-mono text-[8.5px] tracking-[0.06em] text-white/85 uppercase">{l?.name}</span>
+                  <span className="absolute right-1 bottom-1 left-1 truncate font-mono text-[8.5px] tracking-[0.06em] text-white/85 uppercase">{spot?.name ?? l?.name}</span>
                 </button>
               );
             })}

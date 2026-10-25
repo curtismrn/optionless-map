@@ -144,6 +144,7 @@ export const Variant = z
 export type Variant = z.infer<typeof Variant>;
 
 export const POI_CATEGORIES = [
+  "drift",
   "hairpin",
   "viewpoint",
   "notable_corner",
@@ -287,6 +288,7 @@ export const ACTIVITY_CODE: Record<ActivityType, string> = {
 };
 
 export const POI_LABEL: Record<PoiCategory, string> = {
+  drift: "Drift",
   hairpin: "Hairpin",
   viewpoint: "Viewpoint",
   notable_corner: "Notable corner",
@@ -328,6 +330,17 @@ export const VariantInput = z.object({
   detectedHairpins: z.array(LngLat).optional(),
 });
 export type VariantInput = z.infer<typeof VariantInput>;
+
+/** A spot: a point members drop on the map (a corner, a viewpoint…) attached to a road or one of its routes. */
+export const PoiInput = z.object({
+  parent: z.object({ type: z.enum(["location", "variant"]), id: z.string().min(1, "Choose a road") }),
+  name: z.string().trim().min(2, "Name is too short").max(80),
+  category: PoiCategory,
+  description: z.string().trim().max(600),
+  communityLabel: z.boolean(),
+  coordinates: LngLat,
+});
+export type PoiInput = z.infer<typeof PoiInput>;
 
 export const PhotoUpdate = z.object({
   caption: z.string().trim().max(500),

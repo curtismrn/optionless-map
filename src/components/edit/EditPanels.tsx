@@ -383,7 +383,7 @@ export function EditVariantPanel({ id, locationId }: { id?: string; locationId?:
 // ---------------------------------------------------------------------------
 // History + undo
 
-const TABLE_LABEL = { locations: "road", variants: "route", pois: "point", photos: "photo" } as const;
+const TABLE_LABEL = { locations: "road", variants: "route", pois: "spot", photos: "photo" } as const;
 const ACTION_LABEL = { insert: "added", update: "edited", delete: "deleted", restore: "restored" } as const;
 
 export function HistoryPanel() {

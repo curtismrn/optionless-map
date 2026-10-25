@@ -29,6 +29,7 @@ export type ContributeIntent =
   // shared (friends) mode — direct edits
   | { kind: "edit_location"; id?: string }
   | { kind: "edit_variant"; id?: string; locationId?: string }
+  | { kind: "edit_poi"; id?: string; parent?: { type: "location" | "variant"; id: string } }
   | { kind: "history" };
 
 /**

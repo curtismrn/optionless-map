@@ -232,6 +232,7 @@ function RoadDetail({ l }: { l: Location }) {
         items={[
           [<Pencil key="e" className="size-3" />, "Edit road", () => app.set({ contribute: { kind: "edit_location", id: l.id } })],
           [<Plus key="a" className="size-3" />, "Add route", () => app.set({ contribute: { kind: "edit_variant", locationId: l.id } })],
+          [<MapPinPlus key="s" className="size-3" />, "Add spot", () => app.set({ contribute: { kind: "edit_poi", parent: { type: "location", id: l.id } } })],
         ]}
       />
       <div className="om-scroll min-h-0 flex-1 overflow-y-auto">
@@ -263,7 +264,7 @@ function RoadDetail({ l }: { l: Location }) {
         </Block>
 
         {pois.length > 0 && (
-          <Block title="Points of interest">
+          <Block title={`Spots · ${pois.length}`}>
             <PoiList pois={pois} />
           </Block>
         )}
@@ -333,7 +334,12 @@ function VariantDetail({ v }: { v: Variant }) {
           }
         }
       />
-      <MemberBar items={[[<Pencil key="e" className="size-3" />, "Edit route", () => app.set({ contribute: { kind: "edit_variant", id: v.id } })]]} />
+      <MemberBar
+        items={[
+          [<Pencil key="e" className="size-3" />, "Edit route", () => app.set({ contribute: { kind: "edit_variant", id: v.id } })],
+          [<MapPinPlus key="s" className="size-3" />, "Add spot", () => app.set({ contribute: { kind: "edit_poi", parent: { type: "variant", id: v.id } } })],
+        ]}
+      />
       <div className="om-scroll min-h-0 flex-1 overflow-y-auto">
         {(v.publication !== "published" || v.provenance.kind === "illustrative") && (
           <p className="border-b border-line bg-amber/5 px-3 py-2 text-[12px] leading-snug text-fg-dim">
@@ -399,7 +405,7 @@ function VariantDetail({ v }: { v: Variant }) {
         )}
 
         {pois.length > 0 && (
-          <Block title="Points on this route">
+          <Block title={`Spots on this route · ${pois.length}`}>
             <PoiList pois={pois} />
           </Block>
         )}
@@ -477,10 +483,10 @@ function PoiDetail({ p }: { p: Poi }) {
   const photos = data.media.filter((m) => m.attachedTo.type === "poi" && m.attachedTo.id === p.id && m.status !== "removed");
   const addPhoto = () => app.set({ contribute: { kind: "add_media", target: { type: "poi", id: p.id } } });
   return (
-    <PanelShell label={`Point: ${p.name}`}>
+    <PanelShell label={`Spot: ${p.name}`}>
       <Header
         title={p.communityLabel ? `“${p.name}”` : p.name}
-        subtitle={POI_LABEL[p.category]}
+        subtitle={`${POI_LABEL[p.category]} spot`}
         back={{
           label: parentName ?? "Back",
           onClick: () => {
@@ -490,12 +496,18 @@ function PoiDetail({ p }: { p: Poi }) {
           },
         }}
       />
+      <MemberBar
+        items={[
+          [<Camera key="c" className="size-3" />, "Add photo", addPhoto],
+          [<Pencil key="e" className="size-3" />, "Edit spot", () => app.set({ contribute: { kind: "edit_poi", id: p.id } })],
+        ]}
+      />
       <div className="om-scroll min-h-0 flex-1 overflow-y-auto">
         <div className="border-b border-line px-3 py-3">
           {p.communityLabel && <p className="mb-2 text-[12px] text-fg-dim">Local nickname — not an official place name.</p>}
-          <p className="text-[13px] leading-relaxed text-fg">{p.description}</p>
+          <p className="text-[13px] leading-relaxed text-fg">{p.description || "No description yet."}</p>
         </div>
-        <Block title={`Photos · ${photos.length}`}>
+        <Block title={`Photos · ${photos.length}`} aside={<AddPhotoButton onClick={addPhoto} />}>
           <Photos items={photos} onAdd={addPhoto} />
         </Block>
         <Details>

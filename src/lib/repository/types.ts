@@ -1,4 +1,4 @@
-import type { Contribution, Location, MediaItem, Poi, Variant, LocationInput, VariantInput, PhotoUpdate } from "@/lib/domain/schema";
+import type { Contribution, Location, MediaItem, Poi, Variant, LocationInput, VariantInput, PhotoUpdate, PoiInput } from "@/lib/domain/schema";
 
 export interface AtlasSnapshot {
   locations: Location[];
@@ -61,6 +61,8 @@ export interface AtlasEditor {
   deleteLocation(id: string): Promise<void>;
   saveVariant(input: VariantInput, id?: string): Promise<string>;
   deleteVariant(id: string): Promise<void>;
+  savePoi(input: PoiInput, id?: string): Promise<string>;
+  deletePoi(id: string): Promise<void>;
   addPhoto(input: MediaInput): Promise<void>;
   updatePhoto(id: string, patch: PhotoUpdate): Promise<void>;
   deletePhoto(id: string): Promise<void>;
