@@ -17,7 +17,10 @@ let client: SupabaseClient | null = null;
 export function supabase(): SupabaseClient {
   if (!SHARED_MODE) throw new Error("Supabase is not configured");
   client ??= createClient(URL, ANON, {
-    auth: { flowType: "pkce", persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+    // Implicit flow: a sign-in link works in any browser or device (PKCE only accepts it
+    // in the browser that asked for it, which broke links opened from a phone's mail app
+    // and the links made by `npm run link`).
+    auth: { flowType: "implicit", persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
   });
   return client;
 }
