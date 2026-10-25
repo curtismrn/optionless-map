@@ -68,12 +68,22 @@ export function buildCollections(data: Data, filters: Filters, selection: AppSta
       role: routeRole(v, ctx),
       dashed: v.publication !== "published" || v.provenance.kind === "illustrative",
       oneWay: v.direction !== "both",
+      scout: !!v.toScout,
       ci: siblingIndex.get(v.id) ?? 0,
     },
     geometry: { type: "LineString", coordinates: v.geometry.coordinates },
   });
   const variants = fc<LineString>(visibleVariants.map(variantFeature));
 
+  // roads whose only routes are still to scout get a discreet pin
+  const scoutOnly = new Set(
+    data.locations
+      .filter((l) => {
+        const vs = data.variants.filter((v) => v.locationId === l.id);
+        return vs.length > 0 && vs.every((v) => v.toScout);
+      })
+      .map((l) => l.id),
+  );
   const locations = fc<Point>(
     data.locations
       .filter((l) => l.id === ctx.locationId || locationPasses(l, data.variants, filters, withMedia))
@@ -84,6 +94,7 @@ export function buildCollections(data: Data, filters: Filters, selection: AppSta
           id: l.id,
           name: l.name,
           featured: l.featured,
+          scout: scoutOnly.has(l.id),
           active: l.id === ctx.locationId,
           dimmed: !!ctx.locationId && l.id !== ctx.locationId,
           // featured first, then alphabetical — drives label collision priority
@@ -94,7 +105,7 @@ export function buildCollections(data: Data, filters: Filters, selection: AppSta
   );
 
   const density = fc<Point>(
-    visibleVariants.flatMap((v) =>
+    visibleVariants.filter((v) => !v.toScout).flatMap((v) =>
       samplePoints(v.geometry.coordinates as Coord[], 1500).map((c) => ({
         type: "Feature" as const,
         properties: {},
@@ -128,7 +139,7 @@ export function buildCollections(data: Data, filters: Filters, selection: AppSta
   );
 
   const hairpins = fc<Point>(
-    visibleVariants.flatMap((v) =>
+    visibleVariants.filter((v) => !v.toScout || v.id === ctx.variantId).flatMap((v) =>
       v.detectedHairpins.map((c, i) => ({
         type: "Feature" as const,
         properties: { n: i + 1, variantId: v.id },
@@ -274,6 +285,7 @@ export function addOverlay(map: MLMap, t: RouteTheme) {
       type: "line",
       source: "om-variants",
       minzoom: 5,
+      filter: ["!", ["get", "scout"]],
       layout: { "line-cap": "round", "line-join": "round" },
       paint: {
         "line-color": casing,
@@ -286,7 +298,7 @@ export function addOverlay(map: MLMap, t: RouteTheme) {
       type: "line",
       source: "om-variants",
       minzoom: 5,
-      filter: ["!", ["get", "dashed"]],
+      filter: ["all", ["!", ["get", "dashed"]], ["!", ["get", "scout"]]],
       layout: { "line-cap": "round", "line-join": "round" },
       paint: { "line-color": lineColor, "line-width": lineWidth, "line-opacity": lineOpacity },
     },
@@ -295,9 +307,24 @@ export function addOverlay(map: MLMap, t: RouteTheme) {
       type: "line",
       source: "om-variants",
       minzoom: 5,
-      filter: ["get", "dashed"],
+      filter: ["all", ["get", "dashed"], ["!", ["get", "scout"]]],
       layout: { "line-join": "round" },
       paint: { "line-color": lineColor, "line-width": lineWidth, "line-dasharray": [1.6, 1.4], "line-opacity": lineOpacity },
+    },
+    // routes to scout: always visible but faint — a pale dotted trace, no casing, no colour
+    {
+      id: "om-var-scout",
+      type: "line",
+      source: "om-variants",
+      minzoom: 5,
+      filter: ["get", "scout"],
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: {
+        "line-color": t.label,
+        "line-width": zoomWidth((b) => ["case", hovering, b * 1.1, b * 0.7] as ExpressionSpecification),
+        "line-dasharray": [0.2, 2.4],
+        "line-opacity": fadeIn(["case", hovering, 0.9, role(0.4, 0.5, 0.12, 0)]),
+      },
     },
     // the selected route: glow, casing, white line
     {
@@ -409,6 +436,7 @@ export function addOverlay(map: MLMap, t: RouteTheme) {
         "case",
         ["==", ["get", "role"], "primary"], [">=", ["zoom"], 7],
         ["==", ["get", "role"], "faded"], false,
+        ["get", "scout"], false,
         [">=", ["zoom"], 13],
       ],
       layout: {
@@ -484,9 +512,9 @@ export function addOverlay(map: MLMap, t: RouteTheme) {
       source: "om-locations",
       filter: ["!", ["has", "point_count"]],
       paint: {
-        "circle-radius": ["case", hovering, 7, ["get", "active"], 6.5, 5],
-        "circle-color": ["case", ["get", "featured"], t.pinFeatured, t.pin],
-        "circle-stroke-color": ["case", ["get", "active"], t.pinActive, casing],
+        "circle-radius": ["case", hovering, 7, ["get", "active"], 6.5, ["get", "scout"], 3.5, 5],
+        "circle-color": ["case", ["get", "scout"], casing, ["get", "featured"], t.pinFeatured, t.pin],
+        "circle-stroke-color": ["case", ["get", "active"], t.pinActive, ["get", "scout"], t.label, casing],
         "circle-stroke-width": ["case", ["get", "active"], 2, 1.5],
         "circle-opacity": ["case", ["get", "dimmed"], 0.35, 1],
         "circle-stroke-opacity": ["case", ["get", "dimmed"], 0.35, 1],
@@ -512,7 +540,7 @@ export function addOverlay(map: MLMap, t: RouteTheme) {
         "text-color": ["case", ["get", "featured"], t.labelFeatured, t.label],
         "text-halo-color": casing,
         "text-halo-width": 1.6,
-        "text-opacity": ["case", ["get", "dimmed"], 0.45, 1],
+        "text-opacity": ["case", ["get", "dimmed"], 0.45, ["get", "scout"], 0.45, 1],
       },
     },
     // draft (contribution drawing)

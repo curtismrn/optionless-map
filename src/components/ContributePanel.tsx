@@ -90,7 +90,7 @@ export function ContributePanel() {
     case "edit_location":
       return <EditLocationPanel key={intent.id ?? "new"} id={intent.id} />;
     case "edit_variant":
-      return <EditVariantPanel key={intent.id ?? `new-${intent.locationId}`} id={intent.id} locationId={intent.locationId} />;
+      return <EditVariantPanel key={intent.id ?? `new-${intent.locationId}`} id={intent.id} locationId={intent.locationId} toScout={intent.toScout} />;
     case "history":
       return <HistoryPanel />;
     case "members":

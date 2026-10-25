@@ -4,8 +4,8 @@
 //   name & place → routes on this road → distance & elevation → photos → (collapsed) details & sources
 
 import { useMemo, useState } from "react";
-import { X, ArrowLeft, Video, Camera, Flag, Spline, PencilLine, MapPinPlus, ChevronDown, ChevronRight, Pencil, Plus } from "lucide-react";
-import { app, useApp, view, openDetail, useCanEdit } from "@/lib/store";
+import { X, ArrowLeft, Video, Camera, Flag, Spline, PencilLine, MapPinPlus, ChevronDown, ChevronRight, Pencil, Plus, Telescope, Check } from "lucide-react";
+import { app, useApp, view, openDetail, useCanEdit, runEdit } from "@/lib/store";
 import { SHARED_MODE } from "@/lib/supabase";
 import { ACTIVITY_LABEL, POI_LABEL, type Location, type Poi, type Variant, type Contribution, type MediaItem } from "@/lib/domain/schema";
 import { formatCoord, formatKm, lineLength, sliceByDistance, type Coord } from "@/lib/geo";
@@ -218,7 +218,14 @@ export function DetailPanel() {
 
 function RoadDetail({ l }: { l: Location }) {
   const data = useApp((s) => s.data)!;
-  const variants = data.variants.filter((v) => v.locationId === l.id && v.publication === "published");
+  const all = data.variants.filter((v) => v.locationId === l.id && v.publication === "published");
+  const variants = all.filter((v) => !v.toScout);
+  const toScout = all.filter((v) => v.toScout);
+  const pickRoute = (id: string) => {
+    highlightRoute(null);
+    openDetail({ type: "variant", id });
+    focusVariant(id);
+  };
   const photos = useMemo(() => roadMedia(data, l.id), [data, l.id]);
   const pois = data.pois.filter((p) => p.parent?.type === "location" && p.parent.id === l.id && p.publication !== "rejected");
   const contributions = data.contributions.filter((c) => c.locationId === l.id || c.targetId === l.id || c.report?.subject.id === l.id);
@@ -236,21 +243,24 @@ function RoadDetail({ l }: { l: Location }) {
         ]}
       />
       <div className="om-scroll min-h-0 flex-1 overflow-y-auto">
-        <Block title={`${variants.length} route${variants.length === 1 ? "" : "s"} on this road`} aside={<span className="text-[11px] text-fg-faint">Pick one to highlight it</span>}>
-          <ul className="space-y-1">
-            {variants.map((v) => (
-              <RouteRow
-                key={v.id}
-                v={v}
-                onSelect={() => {
-                  highlightRoute(null);
-                  openDetail({ type: "variant", id: v.id });
-                  focusVariant(v.id);
-                }}
-              />
-            ))}
-          </ul>
-        </Block>
+        {(variants.length > 0 || toScout.length === 0) && (
+          <Block title={`${variants.length} route${variants.length === 1 ? "" : "s"} on this road`} aside={<span className="text-[11px] text-fg-faint">Pick one to highlight it</span>}>
+            <ul className="space-y-1">
+              {variants.map((v) => (
+                <RouteRow key={v.id} v={v} onSelect={() => pickRoute(v.id)} />
+              ))}
+            </ul>
+          </Block>
+        )}
+        {toScout.length > 0 && (
+          <Block title={`To scout · ${toScout.length}`} aside={<span className="text-[11px] text-fg-faint">Not driven yet</span>}>
+            <ul className="space-y-1 opacity-80">
+              {toScout.map((v) => (
+                <RouteRow key={v.id} v={v} onSelect={() => pickRoute(v.id)} />
+              ))}
+            </ul>
+          </Block>
+        )}
 
         <div className="border-b border-line px-3 py-3">
           <p className="text-[13px] leading-relaxed text-fg">{l.summary}</p>
@@ -338,9 +348,17 @@ function VariantDetail({ v }: { v: Variant }) {
         items={[
           [<Pencil key="e" className="size-3" />, "Edit route", () => app.set({ contribute: { kind: "edit_variant", id: v.id } })],
           [<MapPinPlus key="s" className="size-3" />, "Add spot", () => app.set({ contribute: { kind: "edit_poi", parent: { type: "variant", id: v.id } } })],
+          v.toScout
+            ? [<Check key="d" className="size-3" />, "We drove it", () => void runEdit((e) => e.setToScout(v.id, false), "Moved to the driven routes.").catch(() => {})]
+            : [<Telescope key="d" className="size-3" />, "Back to scout", () => void runEdit((e) => e.setToScout(v.id, true), "Moved to To scout.").catch(() => {})],
         ]}
       />
       <div className="om-scroll min-h-0 flex-1 overflow-y-auto">
+        {v.toScout && (
+          <p className="flex gap-2 border-b border-line border-dashed px-3 py-2 text-[12px] leading-snug text-fg-dim">
+            <Telescope className="mt-0.5 size-3.5 shrink-0" /> To scout — spotted on the map, nobody has driven it yet.
+          </p>
+        )}
         {(v.publication !== "published" || v.provenance.kind === "illustrative") && (
           <p className="border-b border-line bg-amber/5 px-3 py-2 text-[12px] leading-snug text-fg-dim">
             {v.publication !== "published"

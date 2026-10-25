@@ -61,6 +61,8 @@ export interface AtlasEditor {
   deleteLocation(id: string): Promise<void>;
   saveVariant(input: VariantInput, id?: string): Promise<string>;
   deleteVariant(id: string): Promise<void>;
+  /** Flip a route between "to scout" and driven without touching anything else. */
+  setToScout(id: string, toScout: boolean): Promise<void>;
   savePoi(input: PoiInput, id?: string): Promise<string>;
   deletePoi(id: string): Promise<void>;
   addPhoto(input: MediaInput): Promise<void>;

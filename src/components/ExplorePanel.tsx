@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Route, CircleDot, Layers, SlidersHorizontal, Compass, Star, Camera, LocateFixed, MapPin, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Route, CircleDot, Layers, SlidersHorizontal, Compass, Star, Camera, LocateFixed, MapPin, Plus, Telescope } from "lucide-react";
 import { app, useApp, useView, openDetail } from "@/lib/store";
 import {
   ACTIVITY_LABEL,
@@ -13,7 +13,7 @@ import {
   POI_LABEL,
 } from "@/lib/domain/schema";
 import { search, locationPasses, mediaIndex, DEFAULT_FILTERS, type Filters, type SearchHit } from "@/lib/search";
-import { bboxOf, haversine, type Coord } from "@/lib/geo";
+import { bboxOf, formatKm, haversine, lineLength, type Coord } from "@/lib/geo";
 import { roadMedia } from "@/lib/media";
 import { focusLocation, focusPoint, focusVariant, getMap } from "@/components/map/controller";
 import { openLightbox } from "@/components/media/MediaGallery";
@@ -140,7 +140,7 @@ function Thumb({ m, className }: { m?: MediaItem; className?: string }) {
 /** A road record as a card: cover, name, where, how many routes and media. */
 function RoadRow({ l, data, distanceKm, active }: { l: Location; data: Data; distanceKm?: number; active?: boolean }) {
   const media = roadMedia(data, l.id);
-  const routes = data.variants.filter((v) => v.locationId === l.id && v.publication === "published").length;
+  const routes = data.variants.filter((v) => v.locationId === l.id && v.publication === "published" && !v.toScout).length;
   return (
     <button
       onClick={() => selectLocation(l.id)}
@@ -278,6 +278,64 @@ function SpotsList({ data }: { data: Data }) {
   );
 }
 
+/** A road whose only routes are still to scout: listed under "To scout", not with the driven roads. */
+function scoutOnly(data: Data, locationId: string) {
+  const vs = data.variants.filter((v) => v.locationId === locationId);
+  return vs.length > 0 && vs.every((v) => v.toScout);
+}
+
+function ScoutList({ data }: { data: Data }) {
+  const selection = useApp((s) => s.selection);
+  const isMember = useApp((s) => s.auth.status === "member");
+  const routes = data.variants.filter((v) => v.toScout).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const locId = selection?.type === "location" ? selection.id : selection?.type === "variant" ? data.variants.find((v) => v.id === selection.id)?.locationId : undefined;
+  return (
+    <div className="pb-3">
+      <p className="px-3 pt-3 text-[11.5px] leading-snug text-fg-faint">
+        Roads that look good on the map but nobody has driven yet. Drawn as a faint dotted line; mark one as driven once you&apos;ve been.
+      </p>
+      {isMember && (
+        <div className="px-3 pt-2.5">
+          <button
+            onClick={() => app.set({ contribute: { kind: "edit_variant", locationId: locId, toScout: true }, selection: null })}
+            className="flex h-8 w-full items-center justify-center gap-1.5 border border-dashed border-line-strong text-[12px] text-fg-dim hover:border-ice hover:text-ice"
+          >
+            <Plus className="size-3.5" /> Add a route to scout
+          </button>
+        </div>
+      )}
+      <div className="px-3 pt-4 pb-1">
+        <span className="om-label">To scout · {routes.length}</span>
+      </div>
+      {routes.length === 0 ? (
+        <p className="px-3 py-4 text-[12px] text-fg-faint">Nothing on the list yet.</p>
+      ) : (
+        <ul>
+          {routes.map((v) => {
+            const road = data.locations.find((l) => l.id === v.locationId);
+            const active = selection?.type === "variant" && selection.id === v.id;
+            return (
+              <li key={v.id}>
+                <button onClick={() => selectVariant(v.id)} className={cn("group flex w-full items-center gap-3 px-3 py-2 text-left", active ? "bg-ice/8" : "hover:bg-panel-2")}>
+                  <span className="grid h-10 w-12 shrink-0 place-items-center border border-dashed border-line-strong text-fg-faint group-hover:text-fg">
+                    <Telescope className="size-4" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[13px] text-fg">{v.name}</span>
+                    <span className="mt-0.5 block truncate font-mono text-[10px] tracking-[0.04em] text-fg-faint uppercase">
+                      {road?.name ?? "—"} · {formatKm(lineLength(v.geometry.coordinates as Coord[]))}
+                    </span>
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function Results() {
   const query = useApp((s) => s.query);
   const filters = useApp((s) => s.filters);
@@ -327,7 +385,7 @@ function Results() {
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[13px] text-fg">{h.type === "variant" ? h.variant.name : h.poi.name}</span>
                   <span className="mt-0.5 block truncate font-mono text-[10px] tracking-[0.04em] text-fg-faint uppercase">
-                    {h.type === "variant" && `Route on ${h.location?.name ?? "—"} · ${ACTIVITY_LABEL[h.variant.activity]}`}
+                    {h.type === "variant" && `Route on ${h.location?.name ?? "—"} · ${h.variant.toScout ? "to scout" : ACTIVITY_LABEL[h.variant.activity]}`}
                     {h.type === "poi" && `Point · ${h.poi.communityLabel ? "local nickname" : h.poi.category.replace("_", " ")}`}
                   </span>
                 </span>
@@ -363,11 +421,11 @@ function Discover() {
   const selection = useApp((s) => s.selection);
   const visibleIds = useView((s) => s.visibleVariantIds);
   const [near, setNear] = useState<{ status: "idle" | "locating" | "ok" | "denied"; at?: Coord }>({ status: "idle" });
-  const [view, setView] = useState<"roads" | "spots">("roads");
+  const [view, setView] = useState<"roads" | "spots" | "scout">("roads");
 
   if (!data) return <div className="px-3 py-6 font-mono text-[10px] text-fg-faint">LOADING ATLAS…</div>;
   const withMedia = mediaIndex(data.media);
-  const locs = data.locations.filter((l) => locationPasses(l, data.variants, filters, withMedia));
+  const locs = data.locations.filter((l) => !scoutOnly(data, l.id) && locationPasses(l, data.variants, filters, withMedia));
   const featured = locs.filter((l) => l.featured);
   const visibleSet = new Set(visibleIds);
   const inViewLocs = locs.filter((l) => data.variants.some((v) => v.locationId === l.id && visibleSet.has(v.id)));
@@ -383,9 +441,10 @@ function Discover() {
     .filter((m) => m.status !== "removed")
     .slice(0, 6);
   const nSpots = data.pois.filter((p) => p.publication === "published").length;
+  const nScout = data.variants.filter((v) => v.toScout).length;
   const viewToggle = (
     <div className="flex border-b border-line px-3 pt-2.5">
-      {(["roads", "spots"] as const).map((v) => (
+      {(["roads", "spots", "scout"] as const).map((v) => (
         <button
           key={v}
           onClick={() => setView(v)}
@@ -394,17 +453,18 @@ function Discover() {
             view === v ? "text-fg" : "text-fg-faint hover:text-fg-dim",
           )}
         >
-          {v === "roads" ? "Roads" : "Spots"} <span className="font-mono text-[10px] text-fg-faint tabular-nums">{v === "roads" ? locs.length : nSpots}</span>
+          {v === "roads" ? "Roads" : v === "spots" ? "Spots" : "To scout"}{" "}
+          <span className="font-mono text-[10px] text-fg-faint tabular-nums">{v === "roads" ? locs.length : v === "spots" ? nSpots : nScout}</span>
           {view === v && <span className="absolute inset-x-0 -bottom-px h-0.5 bg-ice" />}
         </button>
       ))}
     </div>
   );
-  if (view === "spots")
+  if (view !== "roads")
     return (
       <>
         {viewToggle}
-        <SpotsList data={data} />
+        {view === "spots" ? <SpotsList data={data} /> : <ScoutList data={data} />}
       </>
     );
 

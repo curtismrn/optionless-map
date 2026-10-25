@@ -106,6 +106,7 @@ export class SharedRepository implements AtlasRepository, AtlasEditor {
       publication: "published",
       provenance: r.provenance as Provenance,
       detectedHairpins: (r.detected_hairpins as LngLat[]) ?? [],
+      toScout: !!r.to_scout,
       createdBy: this.actor(r.created_by),
       createdAt: r.created_at as string,
       updatedAt: r.updated_at as string,
@@ -208,6 +209,7 @@ export class SharedRepository implements AtlasRepository, AtlasEditor {
       regions: v.regions,
       geometry: v.geometry,
       waypoints: v.waypoints ?? null,
+      to_scout: !!v.toScout,
     };
     // stats are only replaced when the caller recomputed them for a new line
     if (v.elevation !== undefined) row.elevation = v.elevation;
@@ -218,6 +220,12 @@ export class SharedRepository implements AtlasRepository, AtlasEditor {
     const { data, error } = await q;
     if (error) throw friendlyError(error, "Saving the route failed");
     return data.id as string;
+  }
+
+  async setToScout(id: string, toScout: boolean) {
+    const { error, count } = await this.sb.from("variants").update({ to_scout: toScout }, { count: "exact" }).eq("id", id);
+    if (error) throw friendlyError(error, "Updating the route failed");
+    if (!count) throw new Error("Updating the route failed: you need to be signed in as an invited member.");
   }
 
   async deleteVariant(id: string) {

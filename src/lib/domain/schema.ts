@@ -136,6 +136,8 @@ export const Variant = z
     waypoints: z.array(LngLat).optional(),
     /** Turning points >= 150° detected from geometry (heuristic, not authoritative). */
     detectedHairpins: z.array(LngLat).default([]),
+    /** Spotted, looks promising, nobody has driven it yet: listed apart and drawn faintly. */
+    toScout: z.boolean().optional(),
     createdBy: Actor,
     /** Present when this variant came from a local contribution. */
     contributionId: z.string().optional(),
@@ -339,6 +341,7 @@ export const VariantInput = z.object({
   waypoints: z.array(LngLat).min(2).max(25).optional(),
   elevation: ElevationStats.optional(),
   detectedHairpins: z.array(LngLat).optional(),
+  toScout: z.boolean().optional(),
 });
 export type VariantInput = z.infer<typeof VariantInput>;
 

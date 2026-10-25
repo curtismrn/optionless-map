@@ -203,7 +203,7 @@ export function EditLocationPanel({ id }: { id?: string }) {
 // ---------------------------------------------------------------------------
 // Route (variant)
 
-export function EditVariantPanel({ id, locationId }: { id?: string; locationId?: string }) {
+export function EditVariantPanel({ id, locationId, toScout }: { id?: string; locationId?: string; toScout?: boolean }) {
   const data = useApp((s) => s.data)!;
   const draw = useApp((s) => s.draw);
   const existing = id ? data.variants.find((v) => v.id === id) : undefined;
@@ -215,6 +215,7 @@ export function EditVariantPanel({ id, locationId }: { id?: string; locationId?:
     activity: existing?.activity ?? ("mountain_pass" as ActivityType),
     direction: existing?.direction ?? ("both" as Direction),
     surface: existing?.surface ?? "",
+    toScout: existing?.toScout ?? toScout ?? false,
   });
   // A new route starts in line-editing mode; an existing one keeps its stored line untouched unless asked.
   const [editLine, setEditLine] = useState(!existing);
@@ -259,6 +260,7 @@ export function EditVariantPanel({ id, locationId }: { id?: string; locationId?:
       activity: f.activity,
       direction: f.direction,
       surface: f.surface || undefined,
+      toScout: f.toScout,
       countries: existing?.countries ?? loc?.countries ?? [],
       regions: existing?.regions ?? loc?.regions ?? [],
       geometry: { type: "LineString" as const, coordinates: geometry as [number, number][] },
@@ -342,6 +344,12 @@ export function EditVariantPanel({ id, locationId }: { id?: string; locationId?:
         <Field label="Surface" hint="Optional">
           <input className={inputCls} value={f.surface} maxLength={60} onChange={(e) => setF({ ...f, surface: e.target.value })} placeholder="Asphalt, gravel…" />
         </Field>
+        <label className="flex items-start gap-2 border border-dashed border-line-strong px-2.5 py-2 text-[12.5px] text-fg-dim">
+          <input type="checkbox" checked={f.toScout} onChange={(e) => setF({ ...f, toScout: e.target.checked })} className="mt-0.5" />
+          <span>
+            <span className="text-fg">To scout</span> — looks good on the map, nobody has driven it yet. Listed apart from the driven routes and drawn faintly.
+          </span>
+        </label>
 
         <div className="border-t border-line pt-3">
           <div className="mb-2 flex items-center justify-between">
