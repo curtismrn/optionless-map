@@ -30,17 +30,18 @@ export type ContributeIntent =
   | { kind: "edit_location"; id?: string }
   | { kind: "edit_variant"; id?: string; locationId?: string }
   | { kind: "edit_poi"; id?: string; parent?: { type: "location" | "variant"; id: string } }
-  | { kind: "history" };
+  | { kind: "history" }
+  | { kind: "members" };
 
 /**
  * disabled   – no Supabase configured: local demo mode
  * signed_out – shared mode, not signed in
  * member     – signed in and on the members list: can edit
- * not_member – signed in but not invited (should not happen: sign-up is disabled)
+ * not_member – signed in but not (or no longer) on the members list
  */
 export type AuthState =
   | { status: "disabled" | "loading" | "signed_out" | "not_member"; email?: string }
-  | { status: "member"; email: string; name: string; userId: string };
+  | { status: "member"; email: string; name: string; userId: string; owner: boolean };
 
 export interface DrawState {
   active: boolean;
@@ -212,10 +213,10 @@ export function startShared() {
     if (!session) {
       app.set({ auth: { status: "signed_out" } });
     } else {
-      const { data } = await sb.from("members").select("display_name").eq("user_id", session.user.id).maybeSingle();
+      const { data } = await sb.from("members").select("display_name, role").eq("user_id", session.user.id).maybeSingle();
       app.set({
         auth: data
-          ? { status: "member", email: session.user.email ?? "", name: data.display_name as string, userId: session.user.id }
+          ? { status: "member", email: session.user.email ?? "", name: data.display_name as string, userId: session.user.id, owner: data.role === "owner" }
           : { status: "not_member", email: session.user.email },
       });
     }
@@ -233,11 +234,12 @@ export function startShared() {
 export async function sendMagicLink(email: string) {
   const { error } = await supabase().auth.signInWithOtp({
     email: email.trim().toLowerCase(),
-    // invitation only: unknown addresses are refused instead of creating accounts
-    options: { shouldCreateUser: false, emailRedirectTo: window.location.origin },
+    // An invited email gets its account at its first sign-in. The database refuses any
+    // other address (migration 0002), so this cannot be used to sign up.
+    options: { shouldCreateUser: true, emailRedirectTo: window.location.origin },
   });
   if (error) {
-    if (/signups? not allowed|not found|Invalid login/i.test(error.message)) throw new Error("This email hasn't been invited to the atlas.");
+    if (/signups? not allowed|not found|Invalid login|not been invited|Database error/i.test(error.message)) throw new Error("This email hasn't been invited to the atlas.");
     if (/rate limit|security purposes/i.test(error.message)) throw new Error("Too many links requested — wait a minute and try again.");
     throw new Error(error.message);
   }

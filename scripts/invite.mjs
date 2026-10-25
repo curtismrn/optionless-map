@@ -38,8 +38,9 @@ async function findUser(e) {
 
 let user = await findUser(email);
 if (remove) {
+  await admin.from("invites").delete().eq("email", email);
   if (!user) {
-    console.log("No such user.");
+    console.log("No account for this email (any pending invite was cancelled).");
     process.exit(0);
   }
   const { error } = await admin.from("members").delete().eq("user_id", user.id);
@@ -49,6 +50,9 @@ if (remove) {
 }
 
 if (!user) {
+  // The account gate (migration 0002) only lets invited emails create an account.
+  const inv = await admin.from("invites").upsert({ email, display_name: name }, { onConflict: "email" });
+  if (inv.error) throw inv.error;
   // Creates the account without sending an email; they sign in from the app with a magic link.
   const { data, error } = await admin.auth.admin.createUser({ email, email_confirm: true });
   if (error) throw error;
@@ -56,4 +60,5 @@ if (!user) {
 }
 const { error } = await admin.from("members").upsert({ user_id: user.id, email, display_name: name }, { onConflict: "user_id" });
 if (error) throw error;
+await admin.from("invites").delete().eq("email", email);
 console.log(`✓ ${name} <${email}> is a member. They can now open the atlas and sign in with “Email me a link”.`);

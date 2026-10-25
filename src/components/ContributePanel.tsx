@@ -35,6 +35,7 @@ import { PanelShell } from "@/components/PanelShell";
 import { AddMediaPanel } from "@/components/media/AddMediaPanel";
 import { EditLocationPanel, EditVariantPanel, HistoryPanel } from "@/components/edit/EditPanels";
 import { EditSpotPanel } from "@/components/edit/EditSpotPanel";
+import { MembersPanel } from "@/components/edit/MembersPanel";
 import { Badge, Button, cn, Field, inputCls, PublicationBadge } from "@/components/ui";
 import { COUNTRY_NAMES } from "@/data/seed";
 
@@ -92,6 +93,8 @@ export function ContributePanel() {
       return <EditVariantPanel key={intent.id ?? `new-${intent.locationId}`} id={intent.id} locationId={intent.locationId} />;
     case "history":
       return <HistoryPanel />;
+    case "members":
+      return <MembersPanel />;
     case "edit_poi":
       return <EditSpotPanel key={intent.id ?? "new"} id={intent.id} parent={intent.parent} />;
   }

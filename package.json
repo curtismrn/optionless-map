@@ -17,7 +17,8 @@
     "test:shared": "node scripts/e2e-shared.mjs",
     "db:reset": "node scripts/db-reset.mjs",
     "db:seed": "node scripts/db-setup.mjs --seed",
-    "dev:demo": "node scripts/dev-demo.mjs"
+    "dev:demo": "node scripts/dev-demo.mjs",
+    "test:members": "node scripts/test-members.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.2",

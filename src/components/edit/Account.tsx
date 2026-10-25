@@ -4,7 +4,7 @@
 // edit menu, and the gate shown on a private atlas to signed-out visitors.
 
 import { useEffect, useRef, useState } from "react";
-import { Camera, ChevronDown, History, Loader2, LogOut, Mail, MapPinned, Pencil, Route, UserRound, Lock } from "lucide-react";
+import { Camera, ChevronDown, History, Loader2, LogOut, Mail, MapPinned, Pencil, Route, UserRound, Lock, Users } from "lucide-react";
 import { app, useApp, sendMagicLink, signOut } from "@/lib/store";
 import { Button, cn, inputCls } from "@/components/ui";
 import { Wordmark } from "@/components/TopBar";
@@ -164,6 +164,11 @@ export function EditMenu() {
           <button role="menuitem" className={item} onClick={() => go(() => app.set({ contribute: { kind: "history" }, selection: null }))}>
             <History className="size-4 text-fg-dim" /> History & undo
           </button>
+          {auth.owner && (
+            <button role="menuitem" className={item} onClick={() => go(() => app.set({ contribute: { kind: "members" }, selection: null }))}>
+              <Users className="size-4 text-fg-dim" /> Members
+            </button>
+          )}
         </div>
       )}
     </div>
