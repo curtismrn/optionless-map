@@ -38,7 +38,7 @@ export function AddMediaPanel({ target }: { target: MediaTarget }) {
   const options = useMemo(() => {
     if (!loc) return [{ value: `${target.type}:${target.id}`, label: "Selected point" }];
     return [
-      { value: `location:${loc.id}`, label: `${loc.name} — whole road / area` },
+      { value: `location:${loc.id}`, label: `${loc.name} — whole place` },
       ...data.variants
         .filter((v) => v.locationId === loc.id && v.publication === "published")
         .map((v) => ({ value: `variant:${v.id}`, label: v.name })),
@@ -136,7 +136,7 @@ export function AddMediaPanel({ target }: { target: MediaTarget }) {
           />
         </div>
 
-        <Field label="Where on this road?">
+        <Field label="Where at this place?">
           <select className={inputCls} value={attach} onChange={(e) => setAttach(e.target.value)}>
             {options.map((o) => (
               <option key={o.value} value={o.value}>

@@ -100,7 +100,7 @@ export function EditLocationPanel({ id }: { id?: string }) {
     if (!parsed.success) return setErr(parsed.error.issues.map((i) => i.message).join(" · "));
     setBusy("Saving…");
     try {
-      const newId = await runEdit((e) => e.saveLocation(parsed.data, id), existing ? "Road saved." : "Road created — now add its first route.");
+      const newId = await runEdit((e) => e.saveLocation(parsed.data, id), existing ? "Place saved." : "Place created — now add its first route.");
       if (existing) openDetail({ type: "location", id: newId });
       else app.set({ contribute: { kind: "edit_variant", locationId: newId }, selection: null });
     } catch (e) {
@@ -116,7 +116,7 @@ export function EditLocationPanel({ id }: { id?: string }) {
     if (!window.confirm(msg)) return;
     setBusy("Deleting…");
     try {
-      await runEdit((e) => e.deleteLocation(existing.id), "Road deleted — undo from History if needed.");
+      await runEdit((e) => e.deleteLocation(existing.id), "Place deleted — undo from History if needed.");
       app.set({ contribute: null, selection: null });
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Deleting failed");
@@ -126,8 +126,8 @@ export function EditLocationPanel({ id }: { id?: string }) {
   };
 
   return (
-    <PanelShell label={existing ? "Edit road" : "New road"}>
-      <Header kicker={existing ? "Edit road · shared with all members" : "New road · shared with all members"} title={existing?.name ?? "New road"} />
+    <PanelShell label={existing ? "Edit place" : "New place"}>
+      <Header kicker={existing ? "Edit place · shared with all members" : "New place · shared with all members"} title={existing?.name ?? "New place"} />
       <div className="om-scroll min-h-0 flex-1 space-y-4 overflow-y-auto px-3 py-3">
         <Field label="Name">
           <input className={inputCls} value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder="e.g. Col de la Bonette" maxLength={120} />
@@ -135,7 +135,7 @@ export function EditLocationPanel({ id }: { id?: string }) {
         <Field label="Short description">
           <textarea rows={3} className={inputCls} value={f.summary} maxLength={1000} onChange={(e) => setF({ ...f, summary: e.target.value })} />
         </Field>
-        <Field label="Countries" hint="Pick several for a border road.">
+        <Field label="Countries" hint="Pick several for a place on a border.">
           <div className="flex flex-wrap gap-1">
             {Object.entries(COUNTRY_NAMES).map(([code, name]) => (
               <button
@@ -195,7 +195,7 @@ export function EditLocationPanel({ id }: { id?: string }) {
         </label>
         <ErrorNote text={err} />
       </div>
-      <Footer busy={busy} onSave={save} onDelete={existing ? del : undefined} saveLabel={existing ? "Save road" : "Create road"} />
+      <Footer busy={busy} onSave={save} onDelete={existing ? del : undefined} saveLabel={existing ? "Save place" : "Create place"} />
     </PanelShell>
   );
 }
@@ -255,7 +255,7 @@ export function EditVariantPanel({ id, locationId, toScout }: { id?: string; loc
     if (editLine && draw.snapStatus === "routing") return setErr("Still finding the road — wait a second.");
     if (geometry.length < 2) return setErr("Place at least two points on the map.");
     if (lineLength(geometry) < 100) return setErr("The route is shorter than 100 m.");
-    if (!locId && !f.toScout) return setErr("Choose a road — only a route to scout can stand alone.");
+    if (!locId && !f.toScout) return setErr("Choose a place — only a route to scout can stand alone.");
     if (!locId && !country) return setErr("Choose the country this route is in.");
     const input = {
       locationId: locId || null,
@@ -314,7 +314,7 @@ export function EditVariantPanel({ id, locationId, toScout }: { id?: string; loc
     <PanelShell label={existing ? "Edit route" : "New route"}>
       <Header kicker={existing ? "Edit route · shared with all members" : "New route · shared with all members"} title={existing?.name ?? (loc ? `New route on ${loc.name}` : "New route")} />
       <div className="om-scroll min-h-0 flex-1 space-y-4 overflow-y-auto px-3 py-3">
-        <Field label="Road" hint={f.toScout ? "Optional for a route to scout" : undefined}>
+        <Field label="Place" hint={f.toScout ? "Optional for a route to scout" : undefined}>
           <select className={inputCls} value={locId} onChange={(e) => setLocId(e.target.value)}>
             {(f.toScout || !locId) && <option value="">None — standalone route to scout</option>}
             {data.locations.map((l) => (
@@ -412,7 +412,7 @@ export function EditVariantPanel({ id, locationId, toScout }: { id?: string; loc
 // ---------------------------------------------------------------------------
 // History + undo
 
-const TABLE_LABEL = { locations: "road", variants: "route", pois: "spot", photos: "photo" } as const;
+const TABLE_LABEL = { locations: "place", variants: "route", pois: "spot", photos: "photo" } as const;
 const ACTION_LABEL = { insert: "added", update: "edited", delete: "deleted", restore: "restored" } as const;
 
 export function HistoryPanel() {
@@ -452,7 +452,7 @@ export function HistoryPanel() {
       <Header kicker="Shared atlas" title="History" />
       <p className="flex gap-2 border-b border-line px-3 py-2 text-[11.5px] leading-snug text-fg-dim">
         <HistoryIcon className="mt-0.5 size-3.5 shrink-0" />
-        Every change by any member is recorded. “Undo” puts that item back to how it was before the change (deleted roads come back route by route).
+        Every change by any member is recorded. “Undo” puts that item back to how it was before the change (deleted places come back route by route).
       </p>
       <div className="om-scroll min-h-0 flex-1 overflow-y-auto">
         {err && (

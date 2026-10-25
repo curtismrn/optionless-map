@@ -131,10 +131,10 @@ export function EditMenu() {
       {open && (
         <div role="menu" className="om-panel absolute top-10 right-0 z-50 w-64 animate-in shadow-[0_12px_32px_rgba(0,0,0,0.5)]">
           <button role="menuitem" className={item} onClick={() => go(() => app.set({ contribute: { kind: "edit_location" }, selection: null }))}>
-            <MapPinned className="size-4 text-ice" /> New road
+            <MapPinned className="size-4 text-ice" /> New place
           </button>
           <button role="menuitem" className={item} onClick={() => go(() => app.set({ contribute: { kind: "edit_variant", locationId: locId ?? undefined } }))}>
-            <Route className="size-4 text-ice" /> New route{locId ? " on this road" : ""}
+            <Route className="size-4 text-ice" /> New route{locId ? " at this place" : ""}
           </button>
           <button
             role="menuitem"
@@ -158,7 +158,7 @@ export function EditMenu() {
             disabled={!selection}
             onClick={() => go(() => selection && app.set({ contribute: { kind: "add_media", target: selection } }))}
           >
-            <Camera className="size-4 text-ice" /> Add a photo{selection ? "" : " (open a road first)"}
+            <Camera className="size-4 text-ice" /> Add a photo{selection ? "" : " (open a place first)"}
           </button>
           <div className="h-px bg-line" />
           <button role="menuitem" className={item} onClick={() => go(() => app.set({ contribute: { kind: "history" }, selection: null }))}>

@@ -182,14 +182,14 @@ export class SharedRepository implements AtlasRepository, AtlasEditor {
       ? this.sb.from("locations").update(row).eq("id", id).select("id").single()
       : this.sb.from("locations").insert({ ...row, provenance: { kind: "community", source: "Added by a member" } }).select("id").single();
     const { data, error } = await q;
-    if (error) throw friendlyError(error, "Saving the road failed");
+    if (error) throw friendlyError(error, "Saving the place failed");
     return data.id as string;
   }
 
   async deleteLocation(id: string) {
     const { error, count } = await this.sb.from("locations").delete({ count: "exact" }).eq("id", id);
-    if (error) throw friendlyError(error, "Deleting the road failed");
-    if (!count) throw new Error("Deleting the road failed: you need to be signed in as an invited member.");
+    if (error) throw friendlyError(error, "Deleting the place failed");
+    if (!count) throw new Error("Deleting the place failed: you need to be signed in as an invited member.");
   }
 
   // ------------------------------------------------------------------ routes

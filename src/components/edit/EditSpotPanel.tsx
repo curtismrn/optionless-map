@@ -150,7 +150,7 @@ export function EditSpotPanel({ id, parent }: { id?: string; parent?: { type: "l
           <textarea rows={3} className={inputCls} value={f.description} maxLength={600} onChange={(e) => setF({ ...f, description: e.target.value })} />
         </Field>
         <div className="grid grid-cols-2 gap-2">
-          <Field label="Road">
+          <Field label="Place">
             <select
               className={inputCls}
               value={roadId}
@@ -169,7 +169,7 @@ export function EditSpotPanel({ id, parent }: { id?: string; parent?: { type: "l
           </Field>
           <Field label="On route">
             <select className={inputCls} value={routeId} onChange={(e) => setRouteId(e.target.value)} disabled={!roadId}>
-              <option value="">Whole road</option>
+              <option value="">Whole place</option>
               {routes.map((v) => (
                 <option key={v.id} value={v.id}>
                   {v.name}

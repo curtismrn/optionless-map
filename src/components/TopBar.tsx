@@ -109,7 +109,7 @@ export function TopBar() {
           ref={inputRef}
           value={query}
           onChange={(e) => app.set({ query: e.target.value, exploreOpen: true })}
-          placeholder="Search roads, passes, countries, corners…"
+          placeholder="Search places, routes, countries, spots…"
           aria-label="Search the atlas"
           className="h-8 w-full border border-line bg-panel pr-16 pl-8 text-[13px] text-fg placeholder:text-fg-faint focus:border-ice/50 focus:outline-none"
         />
@@ -194,13 +194,13 @@ function ContributeMenu({ pending }: { pending: number }) {
             <Camera className="mt-0.5 size-4 text-ice" />
             <span>
               <span className="block text-[13px] text-fg">Add a photo</span>
-              <span className="block text-[11px] text-fg-faint">{target ? "To the road you have open" : "Open a road first, then share"}</span>
+              <span className="block text-[11px] text-fg-faint">{target ? "To the place you have open" : "Open a place first, then share"}</span>
             </span>
           </button>
           <button role="menuitem" className={item} onClick={() => go(() => app.set({ contribute: { kind: "new_variant" }, selection: null }))}>
             <Spline className="mt-0.5 size-4 text-fg-dim" />
             <span>
-              <span className="block text-[13px] text-fg">Suggest a missing road</span>
+              <span className="block text-[13px] text-fg">Suggest a missing place</span>
               <span className="block text-[11px] text-fg-faint">Reviewed before it joins the atlas</span>
             </span>
           </button>

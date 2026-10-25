@@ -233,18 +233,18 @@ function RoadDetail({ l }: { l: Location }) {
   const routeName = (m: MediaItem) => (m.attachedTo.type === "variant" ? data.variants.find((v) => v.id === m.attachedTo.id)?.name : undefined);
 
   return (
-    <PanelShell label={`Road: ${l.name}`}>
-      <Header kicker="Road" title={l.name} subtitle={`${countries(l.countries)} · ${l.regions.slice(0, 2).join(", ")}`} />
+    <PanelShell label={`Place: ${l.name}`}>
+      <Header kicker="Place" title={l.name} subtitle={`${countries(l.countries)} · ${l.regions.slice(0, 2).join(", ")}`} />
       <MemberBar
         items={[
-          [<Pencil key="e" className="size-3" />, "Edit road", () => app.set({ contribute: { kind: "edit_location", id: l.id } })],
+          [<Pencil key="e" className="size-3" />, "Edit place", () => app.set({ contribute: { kind: "edit_location", id: l.id } })],
           [<Plus key="a" className="size-3" />, "Add route", () => app.set({ contribute: { kind: "edit_variant", locationId: l.id } })],
           [<MapPinPlus key="s" className="size-3" />, "Add spot", () => app.set({ contribute: { kind: "edit_poi", parent: { type: "location", id: l.id } } })],
         ]}
       />
       <div className="om-scroll min-h-0 flex-1 overflow-y-auto">
         {(variants.length > 0 || toScout.length === 0) && (
-          <Block title={`${variants.length} route${variants.length === 1 ? "" : "s"} on this road`} aside={<span className="text-[11px] text-fg-faint">Pick one to highlight it</span>}>
+          <Block title={`${variants.length} route${variants.length === 1 ? "" : "s"} at this place`} aside={<span className="text-[11px] text-fg-faint">Pick one to highlight it</span>}>
             <ul className="space-y-1">
               {variants.map((v) => (
                 <RouteRow key={v.id} v={v} onSelect={() => pickRoute(v.id)} />
@@ -356,7 +356,7 @@ function VariantDetail({ v }: { v: Variant }) {
                 () =>
                   v.locationId
                     ? void runEdit((e) => e.setToScout(v.id, false), "Moved to the driven routes.").catch(() => {})
-                    : (toast("Pick its road, then untick “To scout”."), app.set({ contribute: { kind: "edit_variant", id: v.id } })),
+                    : (toast("Pick its place, then untick “To scout”."), app.set({ contribute: { kind: "edit_variant", id: v.id } })),
               ]
             : [<Telescope key="d" className="size-3" />, "Back to scout", () => void runEdit((e) => e.setToScout(v.id, true), "Moved to To scout.").catch(() => {})],
         ]}
@@ -413,7 +413,7 @@ function VariantDetail({ v }: { v: Variant }) {
         )}
 
         {siblings.length > 0 && (
-          <Block title={`Other routes on ${loc?.name ?? "this road"}`}>
+          <Block title={`Other routes at ${loc?.name ?? "this place"}`}>
             <ul className="space-y-1">
               {siblings.map((s) => (
                 <RouteRow

@@ -292,7 +292,7 @@ function ScoutList({ data }: { data: Data }) {
   return (
     <div className="pb-3">
       <p className="px-3 pt-3 text-[11.5px] leading-snug text-fg-faint">
-        Roads that look good on the map but nobody has driven yet. Drawn as a faint dotted line; mark one as driven once you&apos;ve been.
+        Routes that look good on the map but nobody has driven yet. Drawn as a faint dotted line; mark one as driven once you&apos;ve been.
       </p>
       {isMember && (
         <div className="px-3 pt-2.5">
@@ -363,9 +363,9 @@ function Results() {
       </div>
       {hits.length === 0 && (
         <p className="px-3 py-6 text-center text-[12px] leading-relaxed text-fg-faint">
-          No road in the atlas matches “{query}”.
+          Nothing in the atlas matches “{query}”.
           <br />
-          Search covers mapped roads only. Missing one?{" "}
+          Search covers mapped places only. Missing one?{" "}
           <button className="text-ice hover:underline" onClick={() => app.set({ contribute: { kind: "new_variant" }, selection: null })}>
             Suggest it
           </button>
@@ -453,7 +453,7 @@ function Discover() {
             view === v ? "text-fg" : "text-fg-faint hover:text-fg-dim",
           )}
         >
-          {v === "roads" ? "Roads" : v === "spots" ? "Spots" : "To scout"}{" "}
+          {v === "roads" ? "Places" : v === "spots" ? "Spots" : "To scout"}{" "}
           <span className="font-mono text-[10px] text-fg-faint tabular-nums">{v === "roads" ? locs.length : v === "spots" ? nSpots : nScout}</span>
           {view === v && <span className="absolute inset-x-0 -bottom-px h-0.5 bg-ice" />}
         </button>
@@ -511,14 +511,14 @@ function Discover() {
               </li>
             ))}
           </ul>
-          <p className="px-3 text-[10.5px] text-fg-faint">The demo atlas is small — the closest road may still be far away.</p>
+          <p className="px-3 text-[10.5px] text-fg-faint">The demo atlas is small — the closest place may still be far away.</p>
         </>
       )}
 
       {featured.length > 0 && (
         <>
           <div className="flex items-center gap-1.5 px-3 pt-4 pb-1">
-            <span className="om-label">Featured roads</span>
+            <span className="om-label">Featured places</span>
           </div>
           <ul>
             {featured.map((l) => (
@@ -563,7 +563,7 @@ function Discover() {
         <span className="om-label tabular-nums">{inViewLocs.length}</span>
       </div>
       {inViewLocs.length === 0 ? (
-        <p className="px-3 pb-2 text-[12px] text-fg-faint">No mapped road here yet — pan the map or pick a region.</p>
+        <p className="px-3 pb-2 text-[12px] text-fg-faint">No mapped place here yet — pan the map or pick a region.</p>
       ) : (
         <ul>
           {inViewLocs.slice(0, 6).map((l) => (
@@ -575,7 +575,7 @@ function Discover() {
       )}
 
       <div className="px-3 pt-4 pb-1">
-        <span className="om-label">All roads · {locs.length}</span>
+        <span className="om-label">All places · {locs.length}</span>
       </div>
       <ul>
         {locs
@@ -588,7 +588,7 @@ function Discover() {
       </ul>
       {locs.length === 0 && (
         <p className="px-3 py-4 text-[12px] leading-relaxed text-fg-faint">
-          {data.locations.length === 0 ? "The atlas is empty. Members can add the first road from Edit → New road." : "No roads match the active filters."}
+          {data.locations.length === 0 ? "The atlas is empty. Members can add the first place from Edit → New place." : "No places match the active filters."}
         </p>
       )}
     </div>
@@ -706,7 +706,7 @@ function LayersPane() {
       </ul>
       <div className="om-label mt-4 mb-2">Legend</div>
       <ul className="space-y-1.5 text-[11px] text-fg-dim">
-        <LegendLine color="#8fd6ea" label="Road / drive variant" />
+        <LegendLine color="#8fd6ea" label="Route" />
         <LegendLine color="#e0664c" label="Motorsport format (hill climb, rally, circuit, drift)" />
         <LegendLine color="#b8a6f2" label="Community-submitted" />
         <LegendLine color="#f4f6f7" label="Selected" width={4} />

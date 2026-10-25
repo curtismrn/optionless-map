@@ -52,7 +52,7 @@ export function MembersPanel() {
   };
 
   const remove = async (p: Person) => {
-    const what = p.status === "invited" ? `Cancel the invite for ${p.email}?` : `Remove ${p.display_name} (${p.email})? They lose access right away. Their roads and photos stay.`;
+    const what = p.status === "invited" ? `Cancel the invite for ${p.email}?` : `Remove ${p.display_name} (${p.email})? They lose access right away. Their places and photos stay.`;
     if (!window.confirm(what)) return;
     setErr("");
     setBusy(p.email);

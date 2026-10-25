@@ -145,7 +145,7 @@ export function HoverCard() {
     const l = data.locations.find((x) => x.id === hover.id);
     if (!l) return null;
     const n = data.variants.filter((v) => v.locationId === l.id && v.publication !== "rejected").length;
-    kicker = `Road · ${l.countries.join("/")}`;
+    kicker = `Place · ${l.countries.join("/")}`;
     title = l.name;
     const photos = data.media.filter((m) => m.attachedTo.id === l.id || data.variants.some((v) => v.locationId === l.id && v.id === m.attachedTo.id)).length;
     meta = `${n} route${n === 1 ? "" : "s"}${photos ? ` · ${photos} photos` : ""}`;

@@ -272,8 +272,8 @@ function NewVariantFlow({ intent }: { intent: Extract<ContributeIntent, { kind: 
   const loc = data.locations.find((l) => l.id === locationId);
 
   return (
-    <PanelShell label="Suggest a missing road">
-      <Header kicker="Suggest · reviewed before publication" title={parentMode === "existing" && loc ? `Missing route · ${loc.name}` : "Suggest a missing road"} />
+    <PanelShell label="Suggest a missing place">
+      <Header kicker="Suggest · reviewed before publication" title={parentMode === "existing" && loc ? `Missing route · ${loc.name}` : "Suggest a missing place"} />
       <DemoNotice />
       <ol className="grid grid-cols-4 border-b border-line">
         {STEPS.map((s, i) => (
@@ -664,7 +664,7 @@ function DescriptionFlow({ variantId }: { variantId: string }) {
 
 const REPORT_REASONS = {
   incorrect_geometry: "Route line is wrong",
-  duplicate: "Duplicate of another road",
+  duplicate: "Duplicate of another place",
   wrong_information: "Wrong name or information",
   unsafe_or_illegal: "Promotes unsafe or illegal driving",
   private_location: "Shows a private / personal location",
@@ -750,7 +750,7 @@ function ReportFlow({ subject }: { subject: ReportSubject }) {
 // ---------------------------------------------------------------------------
 
 const KIND_LABEL: Record<Contribution["kind"], string> = {
-  new_variant: "Road suggestion",
+  new_variant: "Place suggestion",
   geometry_correction: "Route-line fix",
   new_poi: "New point",
   description_edit: "Text edit",
@@ -786,7 +786,7 @@ function MySubmissions() {
       <div className="flex gap-2 border-b border-line bg-amber/5 px-3 py-2 text-[11px] leading-snug text-fg-dim">
         <ShieldAlert className="mt-0.5 size-3.5 shrink-0 text-amber" />
         <span>
-          Road suggestions, fixes and reports wait for <span className="text-amber">review</span> and stay out of the main atlas until approved.
+          Place suggestions, fixes and reports wait for <span className="text-amber">review</span> and stay out of the main atlas until approved.
           Reviewing needs accounts and moderators, which this prototype doesn&apos;t have yet — so these statuses won&apos;t change. Photos appear straight away — in this browser only.
         </span>
       </div>
@@ -795,7 +795,7 @@ function MySubmissions() {
           <span className="om-label">Photos · {myMedia.length}</span>
         </div>
         {myMedia.length === 0 ? (
-          <p className="px-3 pb-3 text-[12px] text-fg-faint">Open any road and use “Add photo”.</p>
+          <p className="px-3 pb-3 text-[12px] text-fg-faint">Open any place and use “Add photo”.</p>
         ) : (
           <div className="grid grid-cols-4 gap-1 px-3 pb-3">
             {myMedia.map((m, i) => (
@@ -824,7 +824,7 @@ function MySubmissions() {
                 <span className="ml-auto font-mono text-[10px] text-fg-faint">{c.submittedAt.slice(0, 16).replace("T", " ")}</span>
               </div>
               <div className="mt-1 text-[13px] text-fg">
-                {c.kind === "new_variant" && `${c.variant?.name} → ${c.newLocation ? `${c.newLocation.name} (new road)` : nameOf(c.locationId)}`}
+                {c.kind === "new_variant" && `${c.variant?.name} → ${c.newLocation ? `${c.newLocation.name} (new place)` : nameOf(c.locationId)}`}
                 {c.kind === "new_poi" && `${c.poi?.name} → ${nameOf(c.targetId)}`}
                 {c.kind === "geometry_correction" && `Route line of ${nameOf(c.targetId)}`}
                 {c.kind === "description_edit" && `Text of ${nameOf(c.targetId)}`}

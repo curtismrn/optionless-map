@@ -126,7 +126,7 @@ export function Lightbox() {
           )}
           {lb.ids.length > 0 && m.attachedTo.type !== "poi" && (
             <button onClick={showOnMap} className="flex items-center gap-1 hover:text-fg">
-              <MapPin className="size-3" /> Road
+              <MapPin className="size-3" /> Place
             </button>
           )}
           {SHARED_MODE ? (
@@ -174,7 +174,7 @@ function MemberPhotoActions({ m }: { m: MediaItem }) {
   const locId = m.attachedTo.type === "location" ? m.attachedTo.id : data.variants.find((v) => v.id === m.attachedTo.id)?.locationId;
   const loc = data.locations.find((l) => l.id === locId);
   const targets = loc
-    ? [{ v: `location:${loc.id}`, l: `${loc.name} — whole road` }, ...data.variants.filter((v) => v.locationId === loc.id).map((v) => ({ v: `variant:${v.id}`, l: v.name }))]
+    ? [{ v: `location:${loc.id}`, l: `${loc.name} — whole place` }, ...data.variants.filter((v) => v.locationId === loc.id).map((v) => ({ v: `variant:${v.id}`, l: v.name }))]
     : [{ v: f.attach, l: "Current place" }];
 
   const save = async () => {
