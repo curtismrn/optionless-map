@@ -1,6 +1,7 @@
 // Make a one-time sign-in link for a member without sending an email, when
 // Supabase's built-in mailer is rate-limited. Send it to them yourself (it
 // works once, expires after about an hour, and opens the site signed in).
+// Safe to paste in WhatsApp/Discord/Outlook: previews do not consume it.
 //
 //   npm run link -- friend@example.com
 //
@@ -30,4 +31,7 @@ if (error) {
   console.error("Couldn't make a link:", error.message);
   process.exit(1);
 }
-console.log(`Sign-in link for ${email} (works once, send it only to them):\n\n${data.properties.action_link}\n`);
+// Link to the site itself (not Supabase /verify): the token is only spent when the page runs,
+// so chat previews and mail link scanners cannot use it up.
+const link = `${site.replace(/\/$/, "")}/?login=${data.properties.hashed_token}&type=${member ? "magiclink" : "invite"}`;
+console.log(`Sign-in link for ${email} (works once, within about an hour; send it only to them):\n\n${link}\n`);

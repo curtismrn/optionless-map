@@ -225,7 +225,24 @@ export function startShared() {
     await loadData();
     await subscribe(session?.access_token);
   };
-  sb.auth.getSession().then(({ data }) => resolve(data.session));
+  // Links from `npm run link` carry ?login=<token hash>: it is spent only here, once the page
+  // really runs, so link previews and mail scanners that fetch the URL can't use it up.
+  const url = new URL(window.location.href);
+  const login = url.searchParams.get("login");
+  const type = url.searchParams.get("type") === "invite" ? "invite" : "magiclink";
+  const hashError = new URLSearchParams(url.hash.slice(1)).get("error_description");
+  if (login || hashError) {
+    url.searchParams.delete("login");
+    url.searchParams.delete("type");
+    window.history.replaceState(null, "", url.pathname + url.search);
+  }
+  if (hashError) toast(`Sign-in link didn't work: ${hashError.replace(/\+/g, " ")}. Ask for a new one.`);
+  const ready = login
+    ? sb.auth.verifyOtp({ token_hash: login, type }).then(({ error }) => {
+        if (error) toast("This sign-in link has expired or was already used. Ask for a new one.");
+      })
+    : Promise.resolve();
+  void ready.then(() => sb.auth.getSession()).then(({ data }) => resolve(data.session));
   sb.auth.onAuthStateChange((event, session) => {
     if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "USER_UPDATED") void resolve(session);
   });
