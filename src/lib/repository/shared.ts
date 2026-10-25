@@ -113,7 +113,7 @@ export class SharedRepository implements AtlasRepository, AtlasEditor {
 
     const poiList: Poi[] = (pois.data as Row[]).map((r) => ({
       id: r.id as string,
-      parent: r.location_id ? { type: "location", id: r.location_id as string } : { type: "variant", id: r.variant_id as string },
+      parent: r.location_id ? { type: "location", id: r.location_id as string } : r.variant_id ? { type: "variant", id: r.variant_id as string } : null,
       name: r.name as string,
       communityLabel: !!r.community_label,
       coordinates: r.coordinates as LngLat,
@@ -231,8 +231,8 @@ export class SharedRepository implements AtlasRepository, AtlasEditor {
   async savePoi(input: PoiInput, id?: string): Promise<string> {
     const v = PoiInput.parse(input);
     const row = {
-      location_id: v.parent.type === "location" ? v.parent.id : null,
-      variant_id: v.parent.type === "variant" ? v.parent.id : null,
+      location_id: v.parent?.type === "location" ? v.parent.id : null,
+      variant_id: v.parent?.type === "variant" ? v.parent.id : null,
       name: v.name,
       category: v.category,
       description: v.description,

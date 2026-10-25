@@ -173,7 +173,9 @@ function RoadRow({ l, data, distanceKm, active }: { l: Location; data: Data; dis
 
 /** The road a spot belongs to (directly, or through its route). */
 function spotRoadId(data: Data, p: Poi): string | undefined {
-  return p.parent.type === "location" ? p.parent.id : data.variants.find((v) => v.id === p.parent.id)?.locationId;
+  if (!p.parent) return undefined;
+  const { type, id } = p.parent;
+  return type === "location" ? id : data.variants.find((v) => v.id === id)?.locationId;
 }
 
 function spotMedia(data: Data, id: string): MediaItem[] {
@@ -224,9 +226,10 @@ function SpotsList({ data }: { data: Data }) {
   const visibleIds = useView((s) => s.visibleVariantIds);
   const count = (id: string) => spotMedia(data, id).length;
   const spots = data.pois.filter((p) => p.publication === "published").sort((a, b) => count(b.id) - count(a.id) || a.name.localeCompare(b.name));
-  // in view = the spot's route (or a route of its road) is on screen
-  const visibleSet = new Set(visibleIds);
-  const inView = spots.filter((p) => data.variants.some((v) => (p.parent.type === "variant" ? v.id === p.parent.id : v.locationId === p.parent.id) && visibleSet.has(v.id)));
+  // in view = inside the map's current bounds
+  void visibleIds; // re-render when the map moves
+  const bounds = getMap()?.getBounds();
+  const inView = bounds ? spots.filter((p) => bounds.contains(p.coordinates as [number, number])) : [];
   const active = selection?.type === "poi" ? selection.id : undefined;
   return (
     <div className="pb-3">

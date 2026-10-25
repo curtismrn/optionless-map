@@ -1,8 +1,9 @@
 "use client";
 
 // Create / edit / delete a spot (shared mode, members only). A spot is a point
-// on the map — a drift corner, a viewpoint — attached to a road (or one of its
-// routes) so it shows up on that road's page; photos can be posted on it.
+// on the map — a drift corner, a meet-up car park — where members post photos.
+// It can belong to a road (or one of its routes), so it shows on that road's
+// page, or stand on its own.
 
 import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Camera, Crosshair, Loader2, MapPin, Save, Trash2 } from "lucide-react";
@@ -15,7 +16,7 @@ import { Header, closeContribute } from "@/components/ContributePanel";
 import { Button, Field, inputCls } from "@/components/ui";
 
 /** Closest route to a point (and its road), within maxM metres. */
-function nearestRoute(data: NonNullable<ReturnType<typeof app.get>["data"]>, p: Coord, maxM = 3000) {
+function nearestRoute(data: NonNullable<ReturnType<typeof app.get>["data"]>, p: Coord, maxM = 300) {
   let best: { variantId: string; locationId: string; d: number } | null = null;
   for (const v of data.variants) {
     const d = distanceToLine(p, v.geometry.coordinates as Coord[]);
@@ -58,17 +59,16 @@ export function EditSpotPanel({ id, parent }: { id?: string; parent?: { type: "l
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // a click on the map places the spot; snap the road choice to the nearest route
+  // a click on the map places the spot; a new spot right on a road is attached to it,
+  // anywhere else it stands alone (both can be changed below)
   useEffect(() => {
     if (!placing || !draw.waypoints[0]) return;
     const p = draw.waypoints[0];
     setPoint(p);
-    if (!existing || !roadId) {
+    if (!existing && !parent) {
       const n = nearestRoute(data, p);
-      if (n) {
-        setRoadId(n.locationId);
-        setRouteId(n.d <= 150 ? n.variantId : "");
-      }
+      setRoadId(n?.locationId ?? "");
+      setRouteId(n && n.d <= 150 ? n.variantId : "");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draw.waypoints, placing]);
@@ -81,7 +81,7 @@ export function EditSpotPanel({ id, parent }: { id?: string; parent?: { type: "l
     const parsed = PoiInput.safeParse({
       ...f,
       coordinates: point,
-      parent: routeId ? { type: "variant", id: routeId } : { type: "location", id: roadId },
+      parent: routeId ? { type: "variant", id: routeId } : roadId ? { type: "location", id: roadId } : null,
     });
     if (!parsed.success) return setErr(parsed.error.issues.map((i) => i.message).join(" · "));
     setBusy("Saving…");
@@ -105,7 +105,8 @@ export function EditSpotPanel({ id, parent }: { id?: string; parent?: { type: "l
       await runEdit((e) => e.deletePoi(existing.id), "Spot deleted — undo from History if needed.");
       app.set({ draw: EMPTY_DRAW });
       const pr = existing.parent;
-      openDetail({ type: pr.type, id: pr.id });
+      if (pr) openDetail({ type: pr.type, id: pr.id });
+      else app.set({ selection: null, contribute: null });
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Deleting failed");
     } finally {
@@ -157,7 +158,7 @@ export function EditSpotPanel({ id, parent }: { id?: string; parent?: { type: "l
                 setRouteId("");
               }}
             >
-              <option value="">Choose…</option>
+              <option value="">None (standalone)</option>
               {data.locations.map((l) => (
                 <option key={l.id} value={l.id}>
                   {l.name}

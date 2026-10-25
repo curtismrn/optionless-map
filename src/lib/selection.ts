@@ -10,7 +10,7 @@ export type Sel = { type: "location" | "variant" | "poi"; id: string } | null;
 export type RouteRole = "none" | "primary" | "sibling" | "faded";
 
 type V = { id: string; locationId: string };
-type P = { id: string; parent: { type: "location" | "variant"; id: string } };
+type P = { id: string; parent: { type: "location" | "variant"; id: string } | null };
 
 export interface SelectionContext {
   locationId: string | null;
@@ -22,9 +22,10 @@ export function selectionContext(sel: Sel, variants: V[], pois: P[]): SelectionC
   if (sel.type === "location") return { locationId: sel.id, variantId: null };
   if (sel.type === "variant") return { locationId: variants.find((v) => v.id === sel.id)?.locationId ?? null, variantId: sel.id };
   const p = pois.find((x) => x.id === sel.id);
-  if (!p) return { locationId: null, variantId: null };
+  if (!p?.parent) return { locationId: null, variantId: null };
   if (p.parent.type === "location") return { locationId: p.parent.id, variantId: null };
-  return { locationId: variants.find((v) => v.id === p.parent.id)?.locationId ?? null, variantId: p.parent.id };
+  const vid = p.parent.id;
+  return { locationId: variants.find((v) => v.id === vid)?.locationId ?? null, variantId: vid };
 }
 
 export function routeRole(v: V, ctx: SelectionContext): RouteRole {

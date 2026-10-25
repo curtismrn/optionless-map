@@ -145,14 +145,19 @@ export type Variant = z.infer<typeof Variant>;
 
 export const POI_CATEGORIES = [
   "drift",
-  "hairpin",
-  "viewpoint",
-  "notable_corner",
-  "landmark",
+  "meetup",
+  "parking",
   "photo_spot",
-  "roadside",
+  "viewpoint",
+  "hairpin",
+  "notable_corner",
   "motorsport_facility",
+  "garage",
+  "fuel",
+  "food",
   "summit",
+  "landmark",
+  "roadside",
   "other",
 ] as const;
 export const PoiCategory = z.enum(POI_CATEGORIES);
@@ -161,7 +166,8 @@ export type PoiCategory = z.infer<typeof PoiCategory>;
 export const Poi = z
   .object({
     id: z.string(),
-    parent: z.object({ type: z.enum(["location", "variant"]), id: z.string() }),
+    /** The road or route the spot belongs to; null for a standalone spot (a car park meet-up, a garage). */
+    parent: z.object({ type: z.enum(["location", "variant"]), id: z.string() }).nullable(),
     name: z.string().min(2).max(80),
     /** true = community nickname, not an authoritative place name */
     communityLabel: z.boolean().default(false),
@@ -289,13 +295,18 @@ export const ACTIVITY_CODE: Record<ActivityType, string> = {
 
 export const POI_LABEL: Record<PoiCategory, string> = {
   drift: "Drift",
+  meetup: "Meet-up",
+  parking: "Parking",
+  garage: "Garage / shop",
+  fuel: "Fuel",
+  food: "Food / café",
   hairpin: "Hairpin",
   viewpoint: "Viewpoint",
   notable_corner: "Notable corner",
   landmark: "Landmark",
   photo_spot: "Photo spot",
   roadside: "Roadside feature",
-  motorsport_facility: "Motorsport facility",
+  motorsport_facility: "Track / circuit",
   summit: "Summit / col",
   other: "Other",
 };
@@ -333,7 +344,7 @@ export type VariantInput = z.infer<typeof VariantInput>;
 
 /** A spot: a point members drop on the map (a corner, a viewpoint…) attached to a road or one of its routes. */
 export const PoiInput = z.object({
-  parent: z.object({ type: z.enum(["location", "variant"]), id: z.string().min(1, "Choose a road") }),
+  parent: z.object({ type: z.enum(["location", "variant"]), id: z.string().min(1) }).nullable(),
   name: z.string().trim().min(2, "Name is too short").max(80),
   category: PoiCategory,
   description: z.string().trim().max(600),

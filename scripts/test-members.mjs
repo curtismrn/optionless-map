@@ -61,6 +61,17 @@ try {
     check("plain member can't invite", await fails(tx, () => tx`select public.invite_member('x@example.com', 'x')`));
     check("plain member can't write members directly", await fails(tx, () => tx`update public.members set role = 'owner' where user_id = ${u.id}`));
 
+    const [spot] = await tx`insert into public.pois (name, coordinates, category) values ('Test meet-up', '[2.35, 48.85]', 'meetup') returning id`;
+    check("member adds a standalone spot (no road)", !!spot?.id);
+    check(
+      "a spot can't belong to a road and a route at once",
+      await fails(tx, async () => {
+        const [v] = await tx`select id, location_id from public.variants limit 1`;
+        if (!v) throw new Error("no route to test with");
+        await tx`insert into public.pois (name, coordinates, category, location_id, variant_id) values ('Both', '[2.35, 48.85]', 'other', ${v.location_id}, ${v.id})`;
+      }),
+    );
+
     await as(tx, owner);
     await tx`select public.remove_member(${friend})`;
     await asAdmin(tx);

@@ -220,7 +220,7 @@ function RoadDetail({ l }: { l: Location }) {
   const data = useApp((s) => s.data)!;
   const variants = data.variants.filter((v) => v.locationId === l.id && v.publication === "published");
   const photos = useMemo(() => roadMedia(data, l.id), [data, l.id]);
-  const pois = data.pois.filter((p) => p.parent.type === "location" && p.parent.id === l.id && p.publication !== "rejected");
+  const pois = data.pois.filter((p) => p.parent?.type === "location" && p.parent.id === l.id && p.publication !== "rejected");
   const contributions = data.contributions.filter((c) => c.locationId === l.id || c.targetId === l.id || c.report?.subject.id === l.id);
   const addPhoto = () => app.set({ contribute: { kind: "add_media", target: { type: "location", id: l.id } } });
   const routeName = (m: MediaItem) => (m.attachedTo.type === "variant" ? data.variants.find((v) => v.id === m.attachedTo.id)?.name : undefined);
@@ -310,7 +310,7 @@ function VariantDetail({ v }: { v: Variant }) {
   const lengthM = useMemo(() => lineLength(coords), [coords]);
   const own = data.media.filter((m) => m.attachedTo.type === "variant" && m.attachedTo.id === v.id && m.status !== "removed");
   const roadWide = data.media.filter((m) => m.attachedTo.type === "location" && m.attachedTo.id === v.locationId && m.status !== "removed");
-  const pois = data.pois.filter((p) => p.parent.type === "variant" && p.parent.id === v.id && p.publication !== "rejected");
+  const pois = data.pois.filter((p) => p.parent?.type === "variant" && p.parent.id === v.id && p.publication !== "rejected");
   const contributions = data.contributions.filter((c) => c.targetId === v.id || `var-${c.id}` === v.id || c.report?.subject.id === v.id);
   const addPhoto = () => app.set({ contribute: { kind: "add_media", target: { type: "variant", id: v.id } } });
 
@@ -478,8 +478,12 @@ function PoiList({ pois }: { pois: Poi[] }) {
 
 function PoiDetail({ p }: { p: Poi }) {
   const data = useApp((s) => s.data)!;
-  const parentName =
-    p.parent.type === "location" ? data.locations.find((l) => l.id === p.parent.id)?.name : data.variants.find((v) => v.id === p.parent.id)?.name;
+  const parent = p.parent;
+  const parentName = !parent
+    ? undefined
+    : parent.type === "location"
+      ? data.locations.find((l) => l.id === parent.id)?.name
+      : data.variants.find((v) => v.id === parent.id)?.name;
   const photos = data.media.filter((m) => m.attachedTo.type === "poi" && m.attachedTo.id === p.id && m.status !== "removed");
   const addPhoto = () => app.set({ contribute: { kind: "add_media", target: { type: "poi", id: p.id } } });
   return (
@@ -487,14 +491,18 @@ function PoiDetail({ p }: { p: Poi }) {
       <Header
         title={p.communityLabel ? `“${p.name}”` : p.name}
         subtitle={`${POI_LABEL[p.category]} spot`}
-        back={{
-          label: parentName ?? "Back",
-          onClick: () => {
-            openDetail({ type: p.parent.type, id: p.parent.id });
-            if (p.parent.type === "variant") focusVariant(p.parent.id);
-            else focusLocation(p.parent.id);
-          },
-        }}
+        back={
+          parent
+            ? {
+                label: parentName ?? "Back",
+                onClick: () => {
+                  openDetail({ type: parent.type, id: parent.id });
+                  if (parent.type === "variant") focusVariant(parent.id);
+                  else focusLocation(parent.id);
+                },
+              }
+            : undefined
+        }
       />
       <MemberBar
         items={[

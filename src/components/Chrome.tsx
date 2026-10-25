@@ -32,7 +32,7 @@ export function StatusBar() {
           ? s.data.variants.find((v) => v.id === sel.id)?.locationId
           : (() => {
               const p = s.data.pois.find((x) => x.id === sel.id);
-              return p?.parent.type === "location" ? p.parent.id : s.data.variants.find((v) => v.id === p?.parent.id)?.locationId;
+              return p?.parent?.type === "location" ? p.parent.id : s.data.variants.find((v) => v.id === p?.parent?.id)?.locationId;
             })();
     const l = s.data.locations.find((x) => x.id === locId);
     return l ? `${l.regions[0] ?? ""} · ${l.countries.map((c) => COUNTRY_NAMES[c] ?? c).join("/")}` : null;

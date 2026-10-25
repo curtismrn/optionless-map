@@ -108,9 +108,9 @@ export function buildCollections(data: Data, filters: Filters, selection: AppSta
   const pois = fc<Point>(
     data.pois
       .filter((p) => p.publication !== "rejected")
-      .filter((p) => (p.parent.type === "variant" ? visibleIds.has(p.parent.id) : true))
+      .filter((p) => (p.parent?.type === "variant" ? visibleIds.has(p.parent.id) : true))
       .map((p: Poi) => {
-        const locId = p.parent.type === "location" ? p.parent.id : variantLoc.get(p.parent.id);
+        const locId = !p.parent ? undefined : p.parent.type === "location" ? p.parent.id : variantLoc.get(p.parent.id);
         return {
           type: "Feature",
           id: p.id,
