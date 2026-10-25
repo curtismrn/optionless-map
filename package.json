@@ -18,7 +18,8 @@
     "db:reset": "node scripts/db-reset.mjs",
     "db:seed": "node scripts/db-setup.mjs --seed",
     "dev:demo": "node scripts/dev-demo.mjs",
-    "test:members": "node scripts/test-members.mjs"
+    "test:members": "node scripts/test-members.mjs",
+    "link": "node scripts/signin-link.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.2",
